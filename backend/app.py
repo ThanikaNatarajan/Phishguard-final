@@ -13,6 +13,8 @@ import numpy as np
 import requests
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 try:
@@ -383,6 +385,15 @@ def get_stats():
         'avg_risk_score':    round(sum(s.get('risk_score',0) for s in scan_history)/total, 1),
         'risk_distribution': dist
     }
+
+# Serve the frontend folder as static files
+FRONTEND_DIR = os.path.join(BASE_DIR, '..', 'frontend')
+if os.path.exists(FRONTEND_DIR):
+    app.mount('/static', StaticFiles(directory=FRONTEND_DIR), name='static')
+
+    @app.get('/app', include_in_schema=False)
+    def serve_frontend():
+        return FileResponse(os.path.join(FRONTEND_DIR, 'index.html'))
 
 if __name__ == '__main__':
     import uvicorn

@@ -790,8 +790,51 @@ function App() {
 
   const phishCount = history.filter(h => h.is_phishing).length;
 
-  // ── Scanner tab ──
-  const ScanTab = () => h('div', null,
+  function renderTab() {
+    if (tab === 'scan')    return h(ScanTabView, { url, setUrl, bulk, setBulk, bulkText, setBulkText, loading, doScan, doBulk, result, bulkRes, setSelected });
+    if (tab === 'history') return h(HistoryTabView, { history, setHistory, setSelected });
+    if (tab === 'stats')   return h(StatsTabView, { history });
+  }
+
+  return h('div', null,
+    h('nav', { className: 'navbar' },
+      h('div', { className: 'logo' },
+        h('div', { className: 'logo-icon' }, '🛡️'),
+        h('div', { className: 'logo-text' }, h('span', null, 'Phish'), 'Guard AI')
+      ),
+      h('div', { className: 'nav-tabs' },
+        [
+          { id:'scan',    icon:'🔍', lbl:'Scanner' },
+          { id:'history', icon:'📋', lbl:'History', badge: history.length },
+          { id:'stats',   icon:'📊', lbl:'Stats' },
+        ].map(t =>
+          h('button', { key: t.id, className: `nav-tab ${tab===t.id?'active':''}`, onClick: () => setTab(t.id) },
+            t.icon,
+            h('span', { className: 'tab-lbl' }, ' ' + t.lbl),
+            t.badge > 0 && h('span', { className: 'nav-badge' }, t.badge)
+          )
+        )
+      ),
+      h('div', { className: 'live-pill' },
+        h('div', { className: 'live-dot' }), 'AI LIVE'
+      )
+    ),
+    h('main', { className: 'main' }, renderTab()),
+    selected && h('div', { className: 'modal-bg', onClick: e => e.target.classList.contains('modal-bg') && setSelected(null) },
+      h('div', { className: 'modal' },
+        h('div', { className: 'modal-hd' },
+          h('div', { className: 'modal-title' }, '🔍 Detailed Report'),
+          h('button', { className: 'modal-close', onClick: () => setSelected(null) }, '✕')
+        ),
+        h(ResultCard, { result: selected, onClose: () => setSelected(null) })
+      )
+    )
+  );
+}
+
+// ── Scanner tab (defined outside App to prevent remount on every keystroke) ──
+function ScanTabView({ url, setUrl, bulk, setBulk, bulkText, setBulkText, loading, doScan, doBulk, result, bulkRes, setSelected }) {
+  return h('div', null,
     h('div', { className: 'hero' },
       h('div', { className: 'hero-badge' },
         h('div', { style:{ width:6,height:6,borderRadius:'50%',background:'var(--accent)',animation:'pulse 2s infinite'} }),
@@ -877,9 +920,10 @@ function App() {
       )
     )
   );
+}
 
-  // ── History tab ──
-  const HistoryTab = () => h('div', null,
+function HistoryTabView({ history, setHistory, setSelected }) {
+  return h('div', null,
     h('div', { className: 'hist-header' },
       h('h2', null, '📋 Scan History'),
       history.length > 0 && h('button', { className: 'clear-btn', onClick: () => setHistory([]) }, '🗑 Clear All')
@@ -908,9 +952,9 @@ function App() {
           )
         )
   );
+}
 
-  // ── Stats tab ──
-  const StatsTab = () => {
+function StatsTabView({ history }) {
     const total = history.length;
     const phishing = history.filter(h => h.is_phishing).length;
     const avg = total ? Math.round(history.reduce((a,b) => a + (b.risk_score||0), 0) / total) : 0;
@@ -949,52 +993,8 @@ function App() {
       ),
       total === 0 && h('div', { className: 'empty' }, h('div', { className: 'empty-icon' }, '📊'), h('p', null, 'Scan some URLs first to see your analytics!'))
     );
-  };
-
-  return h('div', null,
-    // Navbar
-    h('nav', { className: 'navbar' },
-      h('div', { className: 'logo' },
-        h('div', { className: 'logo-icon' }, '🛡️'),
-        h('div', { className: 'logo-text' }, h('span', null, 'Phish'), 'Guard AI')
-      ),
-      h('div', { className: 'nav-tabs' },
-        [
-          { id:'scan',    icon:'🔍', lbl:'Scanner' },
-          { id:'history', icon:'📋', lbl:'History', badge: history.length },
-          { id:'stats',   icon:'📊', lbl:'Stats' },
-        ].map(t =>
-          h('button', { key: t.id, className: `nav-tab ${tab===t.id?'active':''}`, onClick: () => setTab(t.id) },
-            t.icon,
-            h('span', { className: 'tab-lbl' }, ' ' + t.lbl),
-            t.badge > 0 && h('span', { className: 'nav-badge' }, t.badge)
-          )
-        )
-      ),
-      h('div', { className: 'live-pill' },
-        h('div', { className: 'live-dot' }), 'AI LIVE'
-      )
-    ),
-
-    // Content
-    h('main', { className: 'main' },
-      tab === 'scan'    && h(ScanTab),
-      tab === 'history' && h(HistoryTab),
-      tab === 'stats'   && h(StatsTab),
-    ),
-
-    // Modal
-    selected && h('div', { className: 'modal-bg', onClick: e => e.target.classList.contains('modal-bg') && setSelected(null) },
-      h('div', { className: 'modal' },
-        h('div', { className: 'modal-hd' },
-          h('div', { className: 'modal-title' }, '🔍 Detailed Report'),
-          h('button', { className: 'modal-close', onClick: () => setSelected(null) }, '✕')
-        ),
-        h(ResultCard, { result: selected, onClose: () => setSelected(null) })
-      )
-    )
-  );
 }
+
 
 ReactDOM.createRoot(document.getElementById('root')).render(h(App));
 </script>
