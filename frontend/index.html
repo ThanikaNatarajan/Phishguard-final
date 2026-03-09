@@ -536,7 +536,7 @@ async function demoScan(url) {
     // In demo mode screenshot needs backend; we'll show the "not configured" state
     screenshot: { available: false, image_url: null, error: 'Backend not connected. Run app.py and add SCREENSHOT_API_KEY to .env', setup_url: 'https://screenshotone.com' },
     blocked: score >= 0.5,
-    domain_age_note: 'Connect backend for real domain age lookup',
+    domain_age: { age_days: null, created: null, label: 'Connect backend for real domain age' },
   };
 }
 
@@ -708,7 +708,7 @@ function ResultCard({ result, onClose }) {
         { lbl: 'Domain', val: d.domain || '—' },
         { lbl: 'Protocol', val: (d.protocol || '—').toUpperCase() },
         { lbl: 'Scan Time', val: result.scan_time_seconds + 's' },
-        { lbl: 'Domain Age', val: '🔌 Needs backend', small: true },
+        { lbl: 'Domain Age', val: result.domain_age?.label || '—', small: !result.domain_age?.age_days },
       ].map((item, i) =>
         h('div', { className: 'dm', key: i },
           h('div', { className: 'dm-lbl' }, item.lbl),
@@ -762,7 +762,7 @@ function App() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ url: target }),
-          signal: AbortSignal.timeout(6000)
+          signal: AbortSignal.timeout(30000)
         });
         res = await resp.json();
      } catch(e) { 
