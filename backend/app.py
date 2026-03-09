@@ -11,6 +11,13 @@ import joblib
 import numpy as np
 import requests
 from fastapi import FastAPI, HTTPException
+
+try:
+    import whois as whois_lib
+    WHOIS_AVAILABLE = True
+except ImportError:
+    WHOIS_AVAILABLE = False
+    log_import_warning = True
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -146,7 +153,7 @@ def analyze_details(url: str, features: dict, score: float) -> dict:
     if features.get('num_at_signs', 0) > 0: red.append("URL contains '@' — can trick browsers to a different site")
     if features.get('has_punycode'): red.append('Punycode encoding (xn--) — disguises fake domains as real ones')
     if features.get('domain_entropy', 0) > 3.8: red.append('Domain name looks randomly generated — typical of phishing domains')
-    else: green.append('Domain name looks natural and readable')
+    else: green.append('Domain name looks natural and readable')    
     if score >= 0.75:   verdict = 'This URL shows multiple signs of being a phishing website. We strongly recommend NOT visiting this site.'
     elif score >= 0.45: verdict = 'This URL has suspicious characteristics. Proceed with extreme caution and do not enter any personal information.'
     elif score >= 0.2:  verdict = 'This URL appears mostly safe but has minor concerns. Verify before entering any sensitive data.'
@@ -168,7 +175,41 @@ def fetch_screenshot(url: str) -> dict:
     except Exception as e:
         return {'available': False, 'image_url': None, 'error': str(e)}
 
-def run_scan(url: str) -> dict:
+def get_domain_age(url: str) -> dict:
+    """Return domain age info via WHOIS. Returns dict with age_days, created, label."""
+    if not WHOIS_AVAILABLE:
+        return {'age_days': None, 'created': None, 'label': 'Install python-whois'}
+    try:
+        if not url.startswith(('http://', 'https://')):
+            url = 'http://' + url
+        hostname = urlparse(url).hostname or ''
+        # Strip www prefix
+        if hostname.startswith('www.'):
+            hostname = hostname[4:]
+        w = whois_lib.whois(hostname)
+        created = w.creation_date
+        if isinstance(created, list):
+            created = created[0]
+        if not created:
+            return {'age_days': None, 'created': None, 'label': 'No WHOIS data'}
+        age_days = (datetime.now() - created.replace(tzinfo=None)).days
+        if age_days < 30:
+            label = f'{age_days}d old ⚠️ Very new'
+        elif age_days < 180:
+            label = f'{age_days // 30}mo old ⚠️ New'
+        elif age_days < 365:
+            label = f'{age_days // 30}mo old'
+        else:
+            label = f'{age_days // 365}yr {(age_days % 365) // 30}mo old'
+        return {
+            'age_days': age_days,
+            'created': created.strftime('%Y-%m-%d'),
+            'label': label
+        }
+    except Exception as e:
+        return {'age_days': None, 'created': None, 'label': 'Lookup failed'}
+
+
     url = url.strip()
     if not url: raise ValueError('URL is required')
     t0            = time.time()
@@ -185,6 +226,7 @@ def run_scan(url: str) -> dict:
     risk_info  = get_risk_info(risk_score)
     details    = analyze_details(url, features, risk_score)
     screenshot = fetch_screenshot(url)
+    domain_age = get_domain_age(url)
     result = {
         'scan_id': hashlib.md5(f"{url}{time.time()}".encode()).hexdigest()[:12],
         'url': url, 'scanned_at': datetime.now(timezone.utc).isoformat(),
@@ -194,8 +236,8 @@ def run_scan(url: str) -> dict:
         'risk_level': risk_info['level'], 'risk_label': risk_info['label'],
         'risk_color': risk_info['color'], 'risk_emoji': risk_info['emoji'],
         'details': details, 'screenshot': screenshot,
+        'domain_age': domain_age,
         'blocked': risk_score >= 0.5,
-        'domain_age_note': 'Connect WHOIS for real domain age',
     }
     scan_history.insert(0, result)
     if len(scan_history) > 500: scan_history.pop()
