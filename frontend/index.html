@@ -485,7 +485,10 @@ body::before {
 const { useState, useEffect, useCallback, useRef } = React;
 const h = React.createElement;
 
-const API = 'http://localhost:8000';
+const API =
+  window.location.hostname === 'localhost'
+    ? 'http://localhost:8000'
+    : window.location.origin;
 
 // ─── Client-side feature extractor (demo mode) ───────────────
 const SUSP_KW = ['login','signin','verify','account','update','secure','banking','paypal','amazon','apple','google','microsoft','netflix','ebay','password','confirm','suspend','alert','urgent','winner'];

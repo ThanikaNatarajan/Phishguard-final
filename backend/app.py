@@ -230,9 +230,8 @@ def _build_screenshot_api_url(target_url: str) -> str:
 
 def fetch_screenshot(url: str) -> dict:
     """
-    Validate that ScreenshotOne can capture the URL.
-    Returns a proxy path (/screenshot?url=...) so the browser never
-    hits ScreenshotOne directly (avoids CORS / referrer blocks).
+    Do NOT call ScreenshotOne here.
+    Just return the proxy path so only /screenshot makes the real API request.
     """
     if not SCREENSHOT_API_KEY:
         return {
@@ -241,43 +240,16 @@ def fetch_screenshot(url: str) -> dict:
             'error': 'No API key configured. Add SCREENSHOT_API_KEY to your .env file.',
             'setup_url': 'https://screenshotone.com'
         }
+
     if not url.startswith(('http://', 'https://')):
         url = 'https://' + url
 
-    api_url = _build_screenshot_api_url(url)
-
-    # Try up to 2 times — ScreenshotOne can be slow on first hit
-    for attempt in range(2):
-        try:
-            r = requests.get(api_url, timeout=25, stream=True)
-            content_type = r.headers.get('content-type', '')
-            # Read just the first chunk to confirm it's an image (not an error JSON)
-            first_chunk = next(r.iter_content(512), b'')
-            r.close()
-            if r.status_code == 200 and 'image' in content_type:
-                # Return a proxy path — browser will call our /screenshot endpoint
-                proxy_url = f"/screenshot?url={requests.utils.quote(url, safe='')}"
-                return {'available': True, 'image_url': proxy_url, 'error': None}
-            elif r.status_code == 200 and first_chunk.startswith(b'\xff\xd8'):
-                # JPEG magic bytes — it's an image even if content-type was wrong
-                proxy_url = f"/screenshot?url={requests.utils.quote(url, safe='')}"
-                return {'available': True, 'image_url': proxy_url, 'error': None}
-            else:
-                err = f'ScreenshotOne returned HTTP {r.status_code}'
-                if attempt == 0:
-                    log.warning(f"{err} — retrying…")
-                    time.sleep(1)
-                    continue
-                return {'available': False, 'image_url': None, 'error': err}
-        except requests.exceptions.Timeout:
-            if attempt == 0:
-                log.warning("Screenshot timeout — retrying…")
-                continue
-            return {'available': False, 'image_url': None, 'error': 'Screenshot timed out (site may be slow or offline)'}
-        except Exception as e:
-            return {'available': False, 'image_url': None, 'error': str(e)}
-    return {'available': False, 'image_url': None, 'error': 'Screenshot failed after retries'}
-
+    proxy_url = f"/screenshot?url={requests.utils.quote(url, safe='')}"
+    return {
+        'available': True,
+        'image_url': proxy_url,
+        'error': None
+    }
 
 def get_domain_age(url: str) -> dict:
     if not WHOIS_AVAILABLE:

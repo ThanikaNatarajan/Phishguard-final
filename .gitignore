@@ -1,24 +1,42 @@
-# Secrets
+# =========================
+# 🔐 Secrets
+# =========================
 .env
 *.env
 
-# Python
+# =========================
+# 🐍 Python
+# =========================
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 
-# Models / data
+# =========================
+# 📊 Models & Data
+# =========================
 *.pkl
 *.joblib
 *.csv
-model/phishtank_cache.csv
 
-# OS / editor
+# Optional: keep dataset if needed
+# !model/your_final_dataset.csv
+
+# =========================
+# 🖥️ OS / Editors
+# =========================
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
 
-# Logs
+# =========================
+# 📝 Logs
+# =========================
 *.log
+
+# =========================
+# 🧪 Cache / Temp
+# =========================
+*.tmp
+*.cache
