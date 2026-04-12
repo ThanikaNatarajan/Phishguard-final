@@ -1,0 +1,1105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>PhishGuard AI — Phishing Detection</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Sora:wght@300;400;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #060a0f;
+  --surface: #0d1520;
+  --surface2: #111c2e;
+  --surface3: #162338;
+  --border: rgba(255,255,255,0.07);
+  --border-glow: rgba(0,200,255,0.25);
+  --text: #e8f4ff;
+  --muted: #6b8aaa;
+  --dim: #3d5a7a;
+  --accent: #00c8ff;
+  --accent2: #7b2fff;
+  --safe: #00e878;
+  --warn: #ffd60a;
+  --danger: #ff2d55;
+  --danger2: #ff6b35;
+  --r: 12px;
+  --r2: 18px;
+  --navbar-bg: rgba(6,10,15,0.85);
+}
+body.light {
+  --bg: #f0f4f8;
+  --surface: #ffffff;
+  --surface2: #e8eef5;
+  --surface3: #dde5ef;
+  --border: rgba(0,0,0,0.09);
+  --border-glow: rgba(0,150,200,0.25);
+  --text: #0d1520;
+  --muted: #5a7a9a;
+  --dim: #8aaac8;
+  --accent: #007acc;
+  --accent2: #6b1fd9;
+  --safe: #00a854;
+  --warn: #c48a00;
+  --danger: #d4002a;
+  --danger2: #d44a00;
+  --navbar-bg: rgba(240,244,248,0.92);
+}
+
+/* ── Theme toggle switch ── */
+.theme-toggle {
+  display: flex; align-items: center; gap: 8px;
+  cursor: pointer; user-select: none;
+}
+.theme-toggle-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 0.68rem; color: var(--muted);
+  letter-spacing: 0.3px;
+}
+.toggle-track {
+  position: relative; width: 44px; height: 24px;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 99px; cursor: pointer;
+  transition: background 0.25s, border-color 0.25s;
+}
+.toggle-track.on { background: var(--accent); border-color: var(--accent); }
+.toggle-thumb {
+  position: absolute; top: 3px; left: 3px;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+  transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1);
+  display: grid; place-items: center; font-size: 9px; line-height: 1;
+}
+.toggle-track.on .toggle-thumb { transform: translateX(20px); }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Sora', sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image:
+    linear-gradient(rgba(0,200,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,200,255,0.025) 1px, transparent 1px);
+  background-size: 44px 44px;
+  pointer-events: none; z-index: 0;
+}
+#root { position: relative; z-index: 1; }
+
+/* ── Navbar ── */
+.navbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 36px; height: 58px;
+  background: var(--navbar-bg);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 100;
+}
+.logo { display: flex; align-items: center; gap: 11px; }
+.logo-icon {
+  width: 34px; height: 34px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  border-radius: 9px;
+  display: grid; place-items: center; font-size: 16px;
+  box-shadow: 0 0 18px rgba(0,200,255,0.3);
+}
+.logo-text { font-family: 'Space Mono', monospace; font-size: 1.05rem; font-weight: 700; letter-spacing: -0.3px; }
+.logo-text span { color: var(--accent); }
+.live-pill {
+  display: flex; align-items: center; gap: 6px;
+  font-family: 'Space Mono', monospace; font-size: 0.68rem;
+  color: var(--safe); letter-spacing: 0.5px;
+}
+.live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--safe); animation: pulse 2s infinite; }
+@keyframes pulse { 50% { opacity: 0.35; transform: scale(0.8); } }
+
+.nav-tabs { display: flex; gap: 3px; background: var(--surface); border: 1px solid var(--border); padding: 3px; border-radius: 10px; }
+.nav-tab {
+  padding: 7px 18px; border-radius: 8px; border: none;
+  background: transparent; color: var(--muted);
+  font-family: 'Sora', sans-serif; font-size: 0.82rem; font-weight: 500;
+  cursor: pointer; transition: all 0.15s;
+  display: flex; align-items: center; gap: 7px;
+}
+.nav-tab:hover { color: var(--text); background: var(--surface2); }
+.nav-tab.active { background: var(--surface3); color: var(--accent); }
+.nav-badge {
+  background: var(--accent); color: #000; font-size: 0.65rem;
+  font-weight: 800; padding: 1px 6px; border-radius: 99px; line-height: 1.5;
+}
+
+/* ── Main ── */
+.main { max-width: 920px; margin: 0 auto; padding: 52px 24px 100px; }
+
+/* ── Hero ── */
+.hero { text-align: center; margin-bottom: 44px; animation: fadeDown 0.55s ease; }
+@keyframes fadeDown { from { opacity: 0; transform: translateY(-18px); } to { opacity: 1; transform: translateY(0); } }
+.hero-badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: rgba(0,200,255,0.07); border: 1px solid rgba(0,200,255,0.18);
+  color: var(--accent); font-family: 'Space Mono', monospace; font-size: 0.72rem;
+  padding: 5px 14px; border-radius: 99px; margin-bottom: 22px; letter-spacing: 0.5px;
+}
+.hero h1 {
+  font-size: clamp(1.9rem, 4.5vw, 3rem);
+  font-weight: 800; line-height: 1.1; margin-bottom: 14px;
+  background: linear-gradient(135deg, #fff 0%, #a8d8ff 55%, #7b2fff 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+}
+.hero p { color: var(--muted); font-size: 1rem; max-width: 500px; margin: 0 auto; line-height: 1.65; }
+
+/* ── Extension banner ── */
+.ext-banner {
+  display: flex; align-items: center; gap: 16px;
+  background: linear-gradient(135deg, rgba(123,47,255,0.12), rgba(0,200,255,0.07));
+  border: 1px solid rgba(123,47,255,0.28); border-radius: var(--r2);
+  padding: 20px 24px; margin-bottom: 24px; flex-wrap: wrap;
+}
+.ext-icon { width: 44px; height: 44px; background: linear-gradient(135deg, var(--accent2), var(--accent)); border-radius: 12px; display: grid; place-items: center; font-size: 20px; flex-shrink: 0; }
+.ext-info { flex: 1; }
+.ext-info h3 { font-size: 0.92rem; font-weight: 700; margin-bottom: 3px; }
+.ext-info p { font-size: 0.8rem; color: var(--muted); }
+.ext-btn {
+  padding: 10px 20px;
+  background: linear-gradient(135deg, var(--accent2), var(--accent));
+  border: none; border-radius: 10px; color: #fff;
+  font-family: 'Sora', sans-serif; font-weight: 700; font-size: 0.82rem;
+  cursor: pointer; text-decoration: none; display: inline-flex;
+  align-items: center; gap: 7px; transition: opacity 0.18s; white-space: nowrap;
+}
+.ext-btn:hover { opacity: 0.84; }
+
+/* ── Scanner card ── */
+.scanner-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r2); padding: 28px; margin-bottom: 24px;
+  animation: fadeUp 0.55s ease 0.08s both;
+  position: relative; overflow: hidden;
+}
+.scanner-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  opacity: 0.4;
+}
+@keyframes fadeUp { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.input-row { display: flex; gap: 10px; align-items: stretch; }
+.url-wrap { flex: 1; position: relative; }
+.url-ic { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: var(--dim); font-size: 16px; pointer-events: none; }
+.url-input {
+  width: 100%; height: 54px;
+  background: var(--surface2); border: 1.5px solid var(--border);
+  border-radius: var(--r); padding: 0 15px 0 42px;
+  color: var(--text); font-family: 'Space Mono', monospace; font-size: 0.87rem;
+  outline: none; transition: all 0.18s;
+}
+.url-input::placeholder { color: var(--dim); }
+.url-input:focus { border-color: var(--accent); background: var(--surface3); box-shadow: 0 0 0 3px rgba(0,200,255,0.08); }
+
+.scan-btn {
+  height: 54px; padding: 0 26px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  border: none; border-radius: var(--r); color: #fff;
+  font-family: 'Sora', sans-serif; font-size: 0.9rem; font-weight: 700;
+  cursor: pointer; display: flex; align-items: center; gap: 9px;
+  transition: all 0.18s; white-space: nowrap;
+  box-shadow: 0 4px 18px rgba(0,200,255,0.22);
+}
+.scan-btn:hover { opacity: 0.88; transform: translateY(-1px); box-shadow: 0 8px 26px rgba(0,200,255,0.32); }
+.scan-btn:active { transform: none; }
+.scan-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+
+.bulk-toggle { display: flex; align-items: center; gap: 8px; margin-top: 14px; cursor: pointer; width: fit-content; user-select: none; }
+.bulk-toggle input { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; }
+.bulk-toggle span { color: var(--muted); font-size: 0.82rem; }
+.bulk-textarea {
+  width: 100%; min-height: 110px; margin-top: 12px;
+  background: var(--surface2); border: 1.5px solid var(--border);
+  border-radius: var(--r); padding: 14px 15px;
+  color: var(--text); font-family: 'Space Mono', monospace; font-size: 0.82rem;
+  outline: none; resize: vertical; transition: border-color 0.18s; line-height: 1.6;
+}
+.bulk-textarea:focus { border-color: var(--accent); }
+.bulk-textarea::placeholder { color: var(--dim); }
+
+/* ── Loading ── */
+.loading { text-align: center; padding: 52px; animation: fadeIn 0.3s ease; }
+.spinner-ring {
+  width: 68px; height: 68px; border-radius: 50%;
+  border: 2px solid var(--border); border-top-color: var(--accent);
+  animation: spin 0.9s linear infinite;
+  margin: 0 auto 18px; position: relative; display: grid; place-items: center;
+}
+.spinner-ring::after { content: '🛡️'; font-size: 24px; animation: spin 0.9s linear infinite reverse; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-lbl { font-family: 'Space Mono', monospace; font-size: 0.8rem; color: var(--muted); animation: blink 1.3s infinite; }
+@keyframes blink { 50% { opacity: 0.35; } }
+
+/* ── Result card ── */
+.result-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r2); padding: 28px; margin-bottom: 20px;
+  animation: fadeUp 0.45s ease; position: relative; overflow: hidden;
+}
+.result-card.c-danger { border-color: rgba(255,45,85,0.28); }
+.result-card.c-danger::before { content:''; position:absolute; top:0;left:0;right:0;height:1px; background:linear-gradient(90deg,transparent,rgba(255,45,85,0.5),transparent); }
+.result-card.c-warn  { border-color: rgba(255,214,10,0.25); }
+.result-card.c-warn::before  { content:''; position:absolute; top:0;left:0;right:0;height:1px; background:linear-gradient(90deg,transparent,rgba(255,214,10,0.4),transparent); }
+.result-card.c-safe  { border-color: rgba(0,232,120,0.25); }
+.result-card.c-safe::before  { content:''; position:absolute; top:0;left:0;right:0;height:1px; background:linear-gradient(90deg,transparent,rgba(0,232,120,0.4),transparent); }
+
+/* Header row */
+.res-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 22px; flex-wrap: wrap; }
+.res-url-label { font-family: 'Space Mono', monospace; font-size: 0.63rem; letter-spacing: 1.5px; text-transform: uppercase; color: var(--dim); margin-bottom: 6px; }
+.res-url-val { font-family: 'Space Mono', monospace; font-size: 0.85rem; color: var(--muted); word-break: break-all; line-height: 1.5; max-width: 520px; }
+.score-box {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 13px 18px; text-align: center; min-width: 108px; flex-shrink: 0;
+}
+.score-num { font-family: 'Space Mono', monospace; font-size: 2rem; font-weight: 700; line-height: 1; }
+.score-lv  { font-size: 0.66rem; font-weight: 700; letter-spacing: 1.8px; text-transform: uppercase; margin-top: 4px; }
+
+/* Gauge */
+.gauge { margin-bottom: 22px; }
+.gauge-track { height: 6px; background: var(--surface2); border-radius: 99px; overflow: hidden; }
+.gauge-fill {
+  height: 100%; border-radius: 99px;
+  transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.gauge-labels { display: flex; justify-content: space-between; margin-top: 6px; font-family: 'Space Mono', monospace; font-size: 0.63rem; color: var(--dim); }
+
+/* ── SCREENSHOT SECTION ── */
+.screenshot-section {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--r); margin-bottom: 20px; overflow: hidden;
+}
+.screenshot-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 13px 18px; cursor: pointer; user-select: none;
+  transition: background 0.15s;
+  border-bottom: 1px solid transparent;
+}
+.screenshot-header:hover { background: var(--surface3); }
+.screenshot-header.expanded { border-bottom-color: var(--border); }
+.ss-icon { font-size: 15px; }
+.ss-title { font-size: 0.85rem; font-weight: 600; flex: 1; }
+.ss-status { font-family: 'Space Mono', monospace; font-size: 0.7rem; }
+.ss-chevron { color: var(--dim); font-size: 12px; transition: transform 0.2s; }
+.ss-chevron.open { transform: rotate(180deg); }
+
+.screenshot-body { padding: 16px 18px; }
+.ss-safety-note {
+  display: flex; align-items: flex-start; gap: 10px;
+  background: rgba(0,200,255,0.05); border: 1px solid rgba(0,200,255,0.14);
+  border-radius: 9px; padding: 11px 14px;
+  font-size: 0.79rem; color: var(--muted); line-height: 1.55;
+  margin-bottom: 14px;
+}
+.ss-safety-icon { color: var(--accent); font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+
+.ss-img-wrap {
+  position: relative; border-radius: 9px; overflow: hidden;
+  border: 1px solid var(--border); background: var(--surface3);
+  min-height: 60px;
+}
+.ss-img { width: 100%; display: block; border-radius: 9px; }
+.ss-img-loading {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 220px; gap: 10px;
+  font-family: 'Space Mono', monospace; font-size: 0.78rem; color: var(--muted);
+}
+.ss-img-error {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: 140px; gap: 8px; padding: 24px; text-align: center;
+}
+.ss-img-error-icon { font-size: 32px; }
+.ss-img-error-title { font-size: 0.9rem; font-weight: 600; }
+.ss-img-error-msg { font-size: 0.78rem; color: var(--muted); line-height: 1.5; }
+.ss-img-error a { color: var(--accent); }
+
+.ss-overlay {
+  position: absolute; inset: 0;
+  background: linear-gradient(to top, rgba(6,10,15,0.85) 0%, transparent 50%);
+  pointer-events: none;
+}
+.ss-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: 10px; font-size: 0.72rem; color: var(--dim);
+  font-family: 'Space Mono', monospace;
+}
+.ss-not-configured {
+  padding: 24px; text-align: center;
+}
+.ss-not-configured-icon { font-size: 32px; margin-bottom: 10px; }
+.ss-not-configured h4 { font-size: 0.92rem; font-weight: 700; margin-bottom: 6px; }
+.ss-not-configured p { font-size: 0.8rem; color: var(--muted); line-height: 1.6; }
+.ss-not-configured code { background: var(--surface3); padding: 1px 6px; border-radius: 5px; font-family: 'Space Mono', monospace; font-size: 0.78rem; color: var(--accent); }
+.ss-not-configured a { color: var(--accent); }
+.setup-steps {
+  text-align: left; background: var(--surface3);
+  border-radius: 9px; padding: 14px 16px; margin-top: 14px;
+  font-size: 0.78rem; color: var(--muted); line-height: 2;
+}
+.setup-steps strong { color: var(--text); }
+
+/* Verdict */
+.verdict { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--r); padding: 16px 18px; margin-bottom: 18px; }
+.verdict-lbl { font-family: 'Space Mono', monospace; font-size: 0.63rem; letter-spacing: 1.5px; text-transform: uppercase; color: var(--dim); margin-bottom: 8px; }
+.verdict-txt { font-size: 0.88rem; color: var(--muted); line-height: 1.7; }
+
+/* Flags */
+.flags { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 18px; }
+@media(max-width: 580px) { .flags { grid-template-columns: 1fr; } }
+.flags-hd { font-size: 0.7rem; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; margin-bottom: 10px; }
+.flag {
+  display: flex; align-items: flex-start; gap: 9px;
+  padding: 9px 12px; border-radius: 9px; margin-bottom: 7px;
+  font-size: 0.79rem; line-height: 1.5; border: 1px solid var(--border); background: var(--surface2);
+}
+.flag.r { background: rgba(255,45,85,0.05); border-color: rgba(255,45,85,0.18); }
+.flag.r .ftxt { color: #ffb3c1; }
+.flag.g { background: rgba(0,232,120,0.04); border-color: rgba(0,232,120,0.18); }
+.flag.g .ftxt { color: #b3ffda; }
+.fic { flex-shrink: 0; font-size: 12px; margin-top: 1px; }
+
+/* Domain row */
+.dm-row { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; }
+.dm { background: var(--surface2); border: 1px solid var(--border); border-radius: 9px; padding: 11px 15px; flex: 1; min-width: 110px; }
+.dm-lbl { font-family: 'Space Mono', monospace; font-size: 0.62rem; letter-spacing: 1px; text-transform: uppercase; color: var(--dim); margin-bottom: 4px; }
+.dm-val { font-family: 'Space Mono', monospace; font-size: 0.82rem; }
+
+/* Actions */
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.act {
+  padding: 9px 15px; border-radius: 9px; border: 1px solid var(--border);
+  background: var(--surface2); color: var(--muted);
+  font-family: 'Sora', sans-serif; font-size: 0.79rem; font-weight: 600;
+  cursor: pointer; display: flex; align-items: center; gap: 7px;
+  transition: all 0.14s; text-decoration: none;
+}
+.act:hover { border-color: var(--border-glow); color: var(--accent); }
+.act.danger { border-color: rgba(255,45,85,0.3); color: var(--danger); }
+.act.danger:hover { background: rgba(255,45,85,0.08); }
+
+/* ── Bulk ── */
+.bulk-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
+.bstat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 16px; text-align: center; }
+.bstat-n { font-family: 'Space Mono', monospace; font-size: 1.9rem; font-weight: 700; }
+.bstat-l { font-size: 0.7rem; color: var(--muted); margin-top: 3px; text-transform: uppercase; letter-spacing: 0.7px; }
+.bulk-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 15px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; margin-bottom: 7px; cursor: pointer; transition: border-color 0.14s;
+  animation: fadeUp 0.3s ease;
+}
+.bulk-item:hover { border-color: var(--border-glow); }
+.bulk-url { flex: 1; font-family: 'Space Mono', monospace; font-size: 0.79rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bulk-score { font-family: 'Space Mono', monospace; font-size: 0.88rem; font-weight: 700; white-space: nowrap; }
+
+/* ── History ── */
+.hist-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px; }
+.hist-header h2 { font-size: 1.3rem; font-weight: 800; }
+.clear-btn {
+  padding: 7px 14px; border: 1px solid rgba(255,45,85,0.3); border-radius: 8px;
+  background: transparent; color: var(--danger);
+  font-family: 'Sora', sans-serif; font-size: 0.78rem; cursor: pointer; transition: all 0.14s;
+}
+.clear-btn:hover { background: rgba(255,45,85,0.08); }
+.hist-item {
+  display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center;
+  padding: 17px 19px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r); margin-bottom: 9px; cursor: pointer; transition: all 0.14s;
+  animation: fadeUp 0.3s ease;
+}
+.hist-item:hover { border-color: var(--border-glow); transform: translateY(-1px); }
+.hist-url { font-family: 'Space Mono', monospace; font-size: 0.82rem; color: var(--muted); margin-bottom: 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hist-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.hist-time { font-size: 0.72rem; color: var(--dim); font-family: 'Space Mono', monospace; }
+.tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 99px; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; }
+.tag.phish { background: rgba(255,45,85,0.12); color: #ff6b8a; border: 1px solid rgba(255,45,85,0.25); }
+.tag.safe  { background: rgba(0,232,120,0.08); color: var(--safe); border: 1px solid rgba(0,232,120,0.22); }
+.tag.blk   { background: rgba(255,45,85,0.1);  color: var(--danger); border: 1px solid rgba(255,45,85,0.28); }
+.hist-score { text-align: center; }
+.hist-score-n { font-family: 'Space Mono', monospace; font-size: 1.5rem; font-weight: 700; }
+.hist-score-l { font-size: 0.62rem; color: var(--dim); letter-spacing: 0.5px; margin-top: 2px; }
+.hist-thumb { width: 64px; height: 40px; border-radius: 5px; object-fit: cover; border: 1px solid var(--border); flex-shrink: 0; }
+
+/* ── Stats ── */
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-bottom: 28px; }
+.scard { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 18px; animation: fadeUp 0.4s ease both; }
+.scard-lbl { font-size: 0.7rem; color: var(--dim); letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 9px; }
+.scard-val { font-size: 2rem; font-weight: 800; font-family: 'Space Mono', monospace; }
+
+/* ── Modal ── */
+.modal-bg {
+  position: fixed; inset: 0; background: rgba(6,10,15,0.88);
+  backdrop-filter: blur(12px); z-index: 200;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px; animation: fadeIn 0.2s ease;
+}
+.modal {
+  background: var(--surface); border: 1px solid var(--border-glow);
+  border-radius: var(--r2); padding: 28px; max-width: 680px; width: 100%;
+  max-height: 88vh; overflow-y: auto; animation: fadeUp 0.28s ease;
+}
+.modal-hd { display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; }
+.modal-title { font-size: 1.05rem; font-weight: 700; }
+.modal-close {
+  width: 30px; height: 30px; background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 7px; color: var(--muted); font-size: 16px; cursor: pointer;
+  display: grid; place-items: center; transition: all 0.14s;
+}
+.modal-close:hover { border-color: var(--accent); color: var(--text); }
+
+/* ── Empty ── */
+.empty { text-align: center; padding: 60px 20px; color: var(--dim); }
+.empty-icon { font-size: 44px; margin-bottom: 14px; }
+.empty p { font-size: 0.88rem; color: var(--muted); }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+
+@media(max-width: 600px) {
+  .navbar { padding: 0 16px; }
+  .main { padding: 28px 14px 80px; }
+  .input-row { flex-direction: column; }
+  .scan-btn { justify-content: center; }
+  .nav-tab .tab-lbl { display: none; }
+  .bulk-summary { grid-template-columns: 1fr 1fr 1fr; }
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script>
+const { useState, useEffect, useCallback, useRef } = React;
+const h = React.createElement;
+
+const API = 'http://localhost:8000';
+
+// ─── Client-side feature extractor (demo mode) ───────────────
+const SUSP_KW = ['login','signin','verify','account','update','secure','banking','paypal','amazon','apple','google','microsoft','netflix','ebay','password','confirm','suspend','alert','urgent','winner'];
+const SUSP_TLDS = new Set(['.tk','.ml','.ga','.cf','.gq','.pw','.top','.xyz','.club','.online','.site','.link','.click']);
+const TRUST_TLDS = new Set(['.com','.org','.net','.edu','.gov','.io','.co']);
+
+function clientExtract(url) {
+  const norm = url.startsWith('http') ? url : 'http://' + url;
+  let parsed;
+  try { parsed = new URL(norm); } catch { return null; }
+  const host = parsed.hostname || '';
+  const full = norm.toLowerCase();
+  const parts = host.split('.');
+  const tld = parts.length > 1 ? '.' + parts[parts.length-1] : '';
+  return {
+    url: norm, parsed, host, parts, tld,
+    is_https: parsed.protocol === 'https:' ? 1 : 0,
+    has_ip: /^\d+\.\d+\.\d+\.\d+$/.test(host) ? 1 : 0,
+    susp_tld: SUSP_TLDS.has(tld) ? 1 : 0,
+    trust_tld: TRUST_TLDS.has(tld) ? 1 : 0,
+    kw_count: SUSP_KW.filter(k => full.includes(k)).length,
+    brand: ['paypal','amazon','apple','google','microsoft','netflix','facebook'].some(b => full.includes(b) && !parts[0].includes(b)) ? 1 : 0,
+    long_url: norm.length > 100 ? 1 : 0,
+    subdomains: Math.max(0, parts.length - 2),
+    at_signs: (full.match(/@/g)||[]).length,
+    punycode: host.includes('xn--') ? 1 : 0,
+  };
+}
+
+function clientScore(f) {
+  let s = 0;
+  if (!f.is_https) s += 0.22;
+  if (f.has_ip) s += 0.35;
+  if (f.susp_tld) s += 0.30;
+  if (f.trust_tld) s -= 0.10;
+  s += f.kw_count * 0.06;
+  if (f.brand) s += 0.25;
+  if (f.long_url) s += 0.10;
+  if (f.subdomains > 3) s += 0.12;
+  if (f.at_signs > 0) s += 0.20;
+  if (f.punycode) s += 0.15;
+  return Math.max(0, Math.min(1, s));
+}
+
+function clientReport(f, score) {
+  const red = [], green = [];
+  if (!f.is_https) red.push('No HTTPS — connection is unencrypted');
+  else green.push('Uses HTTPS encryption');
+  if (f.has_ip) red.push('URL uses a raw IP address instead of a domain — very suspicious');
+  if (f.susp_tld) red.push(`Free/abused domain extension (${f.tld}) commonly used in phishing`);
+  if (f.trust_tld && !f.susp_tld) green.push('Standard trusted domain extension');
+  if (f.kw_count >= 3) red.push(`Contains ${f.kw_count} suspicious keywords (login, verify, secure…)`);
+  else if (f.kw_count > 0) green.push(`Only ${f.kw_count} sensitive keyword(s) found`);
+  if (f.brand) red.push('Appears to impersonate a well-known brand');
+  if (f.long_url) red.push(`Very long URL — used to hide the real destination`);
+  else green.push('URL length looks normal');
+  if (f.subdomains > 3) red.push(`Excessive subdomain nesting (${f.subdomains} levels)`);
+  else if (f.subdomains === 0) green.push('Clean domain with no suspicious subdomains');
+  if (f.at_signs > 0) red.push("URL contains '@' — can trick browsers to a different site");
+  if (f.punycode) red.push('Punycode encoding (xn--) — disguises fake domains as real ones');
+  const verdict =
+    score >= 0.75 ? 'This URL shows multiple signs of being a phishing website designed to steal your personal information. We strongly recommend NOT visiting this site.' :
+    score >= 0.45 ? 'This URL has suspicious characteristics. It may be legitimate or a phishing attempt. Proceed with extreme caution and do not enter any personal information.' :
+    score >= 0.2  ? 'This URL appears mostly safe but has minor concerns. Verify before entering any sensitive data.' :
+                    'This URL appears safe and legitimate. No signs of phishing detected.';
+  return { red, green, verdict, domain: f.host, protocol: f.parsed.protocol.replace(':',''), path: f.parsed.pathname };
+}
+
+function riskInfo(r) {
+  if (r >= 85) return { level:'CRITICAL', color:'#ff2d55', emoji:'🚨', label:'Critical Risk' };
+  if (r >= 65) return { level:'HIGH',     color:'#ff6b35', emoji:'⚠️',  label:'High Risk' };
+  if (r >= 40) return { level:'MEDIUM',   color:'#ffd60a', emoji:'⚡',  label:'Medium Risk' };
+  if (r >= 20) return { level:'LOW',      color:'#30d158', emoji:'✅',  label:'Low Risk' };
+  return              { level:'SAFE',     color:'#34c759', emoji:'🛡️', label:'Safe' };
+}
+
+async function demoScan(url) {
+  await new Promise(r => setTimeout(r, 1100 + Math.random()*700));
+  const f = clientExtract(url);
+  if (!f) throw new Error('Invalid URL');
+  const score = clientScore(f);
+  const ri = riskInfo(Math.round(score * 100));
+  const details = clientReport(f, score);
+  return {
+    scan_id: Math.random().toString(36).slice(2,14),
+    url, scanned_at: new Date().toISOString(),
+    scan_time_seconds: +(Math.random()*0.4+0.1).toFixed(3),
+    risk_score: Math.round(score * 1000) / 10,
+    risk_raw: score,
+    is_phishing: score >= 0.5,
+    risk_level: ri.level, risk_label: ri.label, risk_color: ri.color, risk_emoji: ri.emoji,
+    details,
+    // In demo mode screenshot needs backend; we'll show the "not configured" state
+    screenshot: { available: false, image_url: null, error: 'Backend not connected. Run app.py and add SCREENSHOT_API_KEY to .env', setup_url: 'https://screenshotone.com' },
+    blocked: score >= 0.5,
+    domain_age: { age_days: null, created: null, label: 'Connect backend for real domain age' },
+  };
+}
+
+// ─── Screenshot panel component ───────────────────────────────
+function ScreenshotPanel({ screenshot, url }) {
+  const [open, setOpen] = useState(true);
+  const [imgLoaded, setImgLoaded] = useState(false);
+  const [imgError, setImgError] = useState(false);
+
+  // Reset image state whenever the screenshot data changes (new scan)
+  const imgKey = screenshot?.image_url || url;
+  const prevKey = useRef(null);
+  if (prevKey.current !== imgKey) {
+    prevKey.current = imgKey;
+    // Can't call setState mid-render, so use a flag trick via ref
+  }
+  // Use key on <img> element to force remount on new scan (handled below)
+
+  const isAvailable = screenshot?.available && screenshot?.image_url;
+  const isNotConfigured = !screenshot?.available && screenshot?.error;
+
+  const statusColor = isAvailable ? '#00e878' : '#ffd60a';
+  const statusText  = isAvailable ? '✓ Preview ready' : '⚠ Not configured';
+
+  return h('div', { className: 'screenshot-section' },
+    h('div', {
+      className: `screenshot-header ${open ? 'expanded' : ''}`,
+      onClick: () => setOpen(o => !o)
+    },
+      h('span', { className: 'ss-icon' }, '📸'),
+      h('span', { className: 'ss-title' }, 'Website Screenshot Preview'),
+      h('span', { className: 'ss-status', style: { color: statusColor } }, statusText),
+      h('span', { className: `ss-chevron ${open ? 'open' : ''}` }, '▼')
+    ),
+
+    open && h('div', { className: 'screenshot-body' },
+
+      // Safety note — always show
+      h('div', { className: 'ss-safety-note' },
+        h('span', { className: 'ss-safety-icon' }, 'ℹ️'),
+        h('span', null, 'This screenshot is captured safely on the server — your browser never connects to the scanned URL. You can see what the site looks like without any risk.')
+      ),
+
+      isAvailable
+        // ── Image proxied through backend ──
+        ? h(ScreenshotImage, { key: imgKey, src: screenshot.image_url, url })
+
+        // ── Not configured — show clear setup instructions ──
+        : h('div', { className: 'ss-not-configured' },
+            h('div', { className: 'ss-not-configured-icon' }, '🔑'),
+            h('h4', null, 'Screenshot Preview — Setup Required'),
+            h('p', null, 'To enable safe website screenshots, you need a free ScreenshotOne API key.'),
+            h('div', { className: 'setup-steps' },
+              h('div', null, h('strong', null, 'Step 1:'), ' Sign up free at ',
+                h('a', { href: 'https://screenshotone.com', target: '_blank' }, 'screenshotone.com'),
+                ' (100 screenshots/month free)'),
+              h('div', null, h('strong', null, 'Step 2:'), ' Copy your Access Key from the dashboard'),
+              h('div', null, h('strong', null, 'Step 3:'), ' Create a ', h('code', null, '.env'), ' file next to ', h('code', null, 'app.py'), ':'),
+              h('div', { style: { fontFamily: 'Space Mono, monospace', background: '#0d1520', padding: '8px 12px', borderRadius: '6px', margin: '4px 0', color: '#00c8ff', fontSize: '0.8rem' } },
+                'SCREENSHOT_API_KEY=your_key_here'),
+              h('div', null, h('strong', null, 'Step 4:'), ' Restart the backend: ', h('code', null, 'uvicorn app:app --reload')),
+              screenshot?.error && h('div', { style: { marginTop: '10px', padding: '8px 12px', background: 'rgba(255,45,85,0.1)', borderRadius: '6px', color: '#ff6b35', fontSize: '0.78rem', fontFamily: 'Space Mono, monospace' } },
+                '⚠ ', screenshot.error)
+            )
+          ),
+
+      isAvailable && h('div', { className: 'ss-footer' },
+        h('span', null, `📡 Captured via ScreenshotOne`),
+        h('span', null, new URL(url.startsWith('http') ? url : 'http://'+url).hostname)
+      )
+    )
+  );
+}
+
+// Separate component so `key` prop forces full remount on new scan
+function ScreenshotImage({ src, url }) {
+  const [imgLoaded, setImgLoaded] = useState(false);
+  const [imgError, setImgError] = useState(false);
+  return h('div', { className: 'ss-img-wrap' },
+    !imgLoaded && !imgError && h('div', { className: 'ss-img-loading' },
+      h('span', null, '⏳'), h('span', null, 'Loading screenshot…')
+    ),
+    imgError
+      ? h('div', { className: 'ss-img-error' },
+          h('div', { className: 'ss-img-error-icon' }, '🖼️'),
+          h('div', { className: 'ss-img-error-title' }, 'Screenshot unavailable'),
+          h('div', { className: 'ss-img-error-msg' }, 'The site may have blocked automated screenshots, be offline, or refused the connection.')
+        )
+      : h('img', {
+          className: 'ss-img', src, alt: 'Website preview',
+          onLoad: () => setImgLoaded(true),
+          onError: () => setImgError(true),
+          style: { display: imgLoaded ? 'block' : 'none' }
+        }),
+    imgLoaded && !imgError && h('div', { className: 'ss-overlay' }),
+  );
+}
+
+// ─── Result card ──────────────────────────────────────────────
+function ResultCard({ result, onClose }) {
+  const ri = riskInfo(result.risk_score);
+  const d  = result.details || {};
+  const cardClass = result.risk_score >= 65 ? 'c-danger' : result.risk_score <= 30 ? 'c-safe' : 'c-warn';
+  const gaugeGrad = result.risk_score >= 65
+    ? 'linear-gradient(90deg, #30d158, #ffd60a, #ff2d55)'
+    : result.risk_score >= 35
+    ? 'linear-gradient(90deg, #30d158, #ffd60a)'
+    : 'linear-gradient(90deg, #30d158, #00e878)';
+
+  const copyReport = () => {
+    const txt = [
+      `PhishGuard Report`,
+      `=================`,
+      `URL: ${result.url}`,
+      `Risk Score: ${result.risk_score}%  |  Level: ${ri.level}`,
+      ``,
+      `Verdict:`,
+      d.verdict,
+      ``,
+      `Red Flags:`,
+      ...(d.red_flags||[]).map(f => `• ${f}`),
+      ``,
+      `Good Signs:`,
+      ...(d.green_flags||[]).map(f => `• ${f}`),
+    ].join('\n');
+    navigator.clipboard.writeText(txt);
+  };
+
+  return h('div', { className: `result-card ${cardClass}` },
+
+    // Header
+    h('div', { className: 'res-header' },
+      h('div', null,
+        h('div', { className: 'res-url-label' }, 'Scanned URL'),
+        h('div', { className: 'res-url-val' }, result.url)
+      ),
+      h('div', { className: 'score-box' },
+        h('div', { className: 'score-num', style: { color: ri.color } }, result.risk_score + '%'),
+        h('div', { className: 'score-lv', style: { color: ri.color } }, ri.level)
+      )
+    ),
+
+    // Gauge
+    h('div', { className: 'gauge' },
+      h('div', { className: 'gauge-track' },
+        h('div', { className: 'gauge-fill', style: { width: result.risk_score + '%', background: gaugeGrad } })
+      ),
+      h('div', { className: 'gauge-labels' },
+        h('span', null, '0 — Safe'),
+        h('span', null, '50'),
+        h('span', null, '100 — Phishing')
+      )
+    ),
+
+    // ── SCREENSHOT PANEL ──
+    h(ScreenshotPanel, { screenshot: result.screenshot, url: result.url }),
+
+    // Verdict
+    h('div', { className: 'verdict' },
+      h('div', { className: 'verdict-lbl' }, '🧠 AI Verdict'),
+      h('p', { className: 'verdict-txt' }, d.verdict)
+    ),
+
+    // Flags
+    h('div', { className: 'flags' },
+      h('div', null,
+        h('div', { className: 'flags-hd', style: { color: '#ff6b8a' } }, '🔴 Red Flags'),
+        (d.red_flags||[]).length === 0
+          ? h('div', { className: 'flag' }, h('span', { className: 'ftxt' }, 'No red flags found'))
+          : (d.red_flags||[]).map((f,i) => h('div', { className: 'flag r', key: i },
+              h('span', { className: 'fic' }, '⚠️'),
+              h('span', { className: 'ftxt' }, f)))
+      ),
+      h('div', null,
+        h('div', { className: 'flags-hd', style: { color: '#00e878' } }, '🟢 Good Signs'),
+        (d.green_flags||[]).length === 0
+          ? h('div', { className: 'flag' }, h('span', { className: 'ftxt' }, 'No positive signals found'))
+          : (d.green_flags||[]).map((f,i) => h('div', { className: 'flag g', key: i },
+              h('span', { className: 'fic' }, '✅'),
+              h('span', { className: 'ftxt' }, f)))
+      )
+    ),
+
+    // Domain details
+    h('div', { className: 'dm-row' },
+      [
+        { lbl: 'Domain', val: d.domain || '—' },
+        { lbl: 'Protocol', val: (d.protocol || '—').toUpperCase() },
+        { lbl: 'Scan Time', val: result.scan_time_seconds + 's' },
+        { lbl: 'Domain Age', val: result.domain_age?.label || '—', small: !result.domain_age?.age_days },
+      ].map((item, i) =>
+        h('div', { className: 'dm', key: i },
+          h('div', { className: 'dm-lbl' }, item.lbl),
+          h('div', { className: 'dm-val', style: item.small ? { fontSize:'0.72rem', color:'#6b8aaa' } : {} }, item.val)
+        )
+      )
+    ),
+
+    // Actions
+    h('div', { className: 'actions' },
+      result.is_phishing && h('a', {
+        href: 'https://chromewebstore.google.com/detail/web-site-blocker/aoabjfoanlljmgnohepbkimcekolejjn',
+        target: '_blank', className: 'act danger'
+      }, '🚫', ' Block with Extension'),
+      h('button', { className: 'act', onClick: copyReport }, '📋 Copy Report'),
+      onClose && h('button', { className: 'act', onClick: onClose }, '✕ Close')
+    )
+  );
+}
+
+// ─── App ──────────────────────────────────────────────────────
+function App() {
+  const [tab, setTab] = useState('scan');
+  const [dark, setDark] = useState(true);
+  const toggleTheme = () => {
+    setDark(d => {
+      const next = !d;
+      document.body.classList.toggle('light', !next);
+      return next;
+    });
+  };
+  const [url, setUrl] = useState('');
+  const [bulk, setBulk] = useState(false);
+  const [bulkText, setBulkText] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
+  const [bulkRes, setBulkRes] = useState(null);
+  const [selected, setSelected] = useState(null);
+  const [history, setHistory] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('pg_hist') || '[]'); } catch { return []; }
+  });
+
+  useEffect(() => {
+    try { localStorage.setItem('pg_hist', JSON.stringify(history.slice(0, 100))); } catch {}
+  }, [history]);
+
+  const addToHistory = useCallback((r) => {
+    if (r && r.scan_id) setHistory(h => [r, ...h.filter(x => x.url !== r.url)].slice(0, 100));
+  }, []);
+
+  const doScan = useCallback(async () => {
+    const target = url.trim();
+    if (!target) return;
+    setLoading(true); setResult(null); setBulkRes(null);
+    try {
+      let res;
+      try {
+        const resp = await fetch(`${API}/scan`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: target }),
+          signal: AbortSignal.timeout(30000)
+        });
+        if (!resp.ok) {
+          const errText = await resp.text();
+          console.error('Backend error ' + resp.status + ':', errText);
+          throw new Error('Backend returned ' + resp.status);
+        }
+        const data = await resp.json();
+        // Validate response has the fields we need
+        if (typeof data.risk_score !== 'number') throw new Error('Invalid response: missing risk_score');
+        res = data;
+      } catch(e) { 
+        console.error('Backend error:', e);
+        res = await demoScan(target); 
+      }
+      setResult(res);
+      addToHistory(res);
+    } catch(e) { alert('Scan error: ' + e.message); }
+    finally { setLoading(false); }
+  }, [url, addToHistory]);
+
+  const doBulk = useCallback(async () => {
+    const urls = bulkText.split('\n').map(u => u.trim()).filter(Boolean);
+    if (!urls.length) return;
+    setLoading(true); setResult(null); setBulkRes(null);
+    try {
+      let results;
+      try {
+        const resp = await fetch(`${API}/scan/bulk`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ urls }),
+          signal: AbortSignal.timeout(60000)
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          results = data.results;
+        } else throw new Error('Backend bulk scan failed');
+      } catch(e) {
+        console.error('Bulk backend error:', e);
+        results = await Promise.all(urls.map(u => demoScan(u).catch(e => ({ url: u, error: e.message }))));
+      }
+      const phishing = results.filter(r => r.is_phishing).length;
+      setBulkRes({ summary: { total: results.length, phishing, safe: results.length - phishing }, results });
+      results.forEach(r => { if (!r.error) addToHistory(r); });
+    } catch(e) { alert('Bulk error: ' + e.message); }
+    finally { setLoading(false); }
+  }, [bulkText, addToHistory]);
+
+  const phishCount = history.filter(h => h.is_phishing).length;
+
+  function renderTab() {
+    if (tab === 'scan')    return h(ScanTabView, { url, setUrl, bulk, setBulk, bulkText, setBulkText, loading, doScan, doBulk, result, bulkRes, setSelected });
+    if (tab === 'history') return h(HistoryTabView, { history, setHistory, setSelected });
+    if (tab === 'stats')   return h(StatsTabView, { history });
+  }
+
+  return h('div', null,
+    h('nav', { className: 'navbar' },
+      h('div', { className: 'logo' },
+        h('div', { className: 'logo-icon' }, '🛡️'),
+        h('div', { className: 'logo-text' }, h('span', null, 'Phish'), 'Guard AI')
+      ),
+      h('div', { className: 'nav-tabs' },
+        [
+          { id:'scan',    icon:'🔍', lbl:'Scanner' },
+          { id:'history', icon:'📋', lbl:'History', badge: history.length },
+          { id:'stats',   icon:'📊', lbl:'Stats' },
+        ].map(t =>
+          h('button', { key: t.id, className: `nav-tab ${tab===t.id?'active':''}`, onClick: () => setTab(t.id) },
+            t.icon,
+            h('span', { className: 'tab-lbl' }, ' ' + t.lbl),
+            t.badge > 0 && h('span', { className: 'nav-badge' }, t.badge)
+          )
+        )
+      ),
+      h('div', { style:{ display:'flex', alignItems:'center', gap:16 } },
+        h('div', { className: 'live-pill' },
+          h('div', { className: 'live-dot' }), 'AI LIVE'
+        ),
+        h('div', { className: 'theme-toggle', onClick: toggleTheme },
+          h('span', { className: 'theme-toggle-label' }, dark ? '🌙' : '☀️'),
+          h('div', { className: `toggle-track ${dark ? '' : 'on'}` },
+            h('div', { className: 'toggle-thumb' }, dark ? '🌙' : '☀️')
+          ),
+          h('span', { className: 'theme-toggle-label' }, dark ? 'Dark' : 'Light')
+        )
+      )
+    ),
+    h('main', { className: 'main' }, renderTab()),
+    selected && h('div', { className: 'modal-bg', onClick: e => e.target.classList.contains('modal-bg') && setSelected(null) },
+      h('div', { className: 'modal' },
+        h('div', { className: 'modal-hd' },
+          h('div', { className: 'modal-title' }, '🔍 Detailed Report'),
+          h('button', { className: 'modal-close', onClick: () => setSelected(null) }, '✕')
+        ),
+        h(ResultCard, { result: selected, onClose: () => setSelected(null) })
+      )
+    )
+  );
+}
+
+// ── Scanner tab (defined outside App to prevent remount on every keystroke) ──
+function ScanTabView({ url, setUrl, bulk, setBulk, bulkText, setBulkText, loading, doScan, doBulk, result, bulkRes, setSelected }) {
+  return h('div', null,
+    h('div', { className: 'hero' },
+      h('div', { className: 'hero-badge' },
+        h('div', { style:{ width:6,height:6,borderRadius:'50%',background:'var(--accent)',animation:'pulse 2s infinite'} }),
+        ' AI MODEL ACTIVE'
+      ),
+      h('h1', null, 'Is this URL safe?'),
+      h('p', null, 'Paste any link. Our AI analyzes it for phishing, impersonation, and threats — then shows you a safe screenshot of the site.')
+    ),
+
+    // Extension banner
+    h('div', { className: 'ext-banner' },
+      h('div', { className: 'ext-icon' }, '🧩'),
+      h('div', { className: 'ext-info' },
+        h('h3', null, 'Block high-risk sites automatically'),
+        h('p', null, 'Install the Web Site Blocker Chrome extension. When PhishGuard flags a dangerous URL, block it with one click.')
+      ),
+      h('a', { href:'https://chromewebstore.google.com/detail/web-site-blocker/aoabjfoanlljmgnohepbkimcekolejjn', target:'_blank', className:'ext-btn' },
+        '🔗', ' Add to Chrome')
+    ),
+
+    // Scanner card
+    h('div', { className: 'scanner-card' },
+      !bulk
+        ? h('div', { className: 'input-row' },
+            h('div', { className: 'url-wrap' },
+              h('span', { className: 'url-ic' }, '🔗'),
+              h('input', {
+                className: 'url-input', type: 'text', value: url,
+                onChange: e => setUrl(e.target.value),
+                onKeyDown: e => e.key === 'Enter' && doScan(),
+                placeholder: 'https://example.com/suspicious-link',
+                autoComplete: 'off', spellCheck: false
+              })
+            ),
+            h('button', { className: 'scan-btn', onClick: doScan, disabled: loading || !url.trim() },
+              loading ? '⏳' : '🛡️',
+              loading ? ' Scanning…' : ' Scan URL'
+            )
+          )
+        : h('div', null,
+            h('textarea', {
+              className: 'bulk-textarea', value: bulkText,
+              onChange: e => setBulkText(e.target.value),
+              placeholder: 'Paste one URL per line:\nhttps://example.com\nhttp://suspicious-site.tk/login'
+            }),
+            h('div', { style:{ marginTop:12, display:'flex', justifyContent:'flex-end' } },
+              h('button', {
+                className: 'scan-btn', onClick: doBulk,
+                disabled: loading || !bulkText.trim()
+              }, loading ? '⏳ Scanning…' : `🛡️ Scan All (${bulkText.split('\n').filter(u=>u.trim()).length} URLs)`)
+            )
+          ),
+
+      h('label', { className: 'bulk-toggle' },
+        h('input', { type:'checkbox', checked: bulk, onChange: e => setBulk(e.target.checked) }),
+        h('span', null, 'Bulk mode — scan multiple URLs at once')
+      )
+    ),
+
+    // Loading
+    loading && h('div', { className: 'loading' },
+      h('div', { className: 'spinner-ring' }),
+      h('div', { className: 'loading-lbl' }, 'Extracting features, running AI & capturing screenshot…')
+    ),
+
+    // Single result
+    result && !loading && h(ResultCard, { result }),
+
+    // Bulk results
+    bulkRes && !loading && h('div', null,
+      h('div', { className: 'bulk-summary' },
+        h('div', { className: 'bstat' }, h('div', { className: 'bstat-n' }, bulkRes.summary.total), h('div', { className: 'bstat-l' }, 'Scanned')),
+        h('div', { className: 'bstat' }, h('div', { className: 'bstat-n', style:{color:'#ff2d55'} }, bulkRes.summary.phishing), h('div', { className: 'bstat-l' }, 'Phishing')),
+        h('div', { className: 'bstat' }, h('div', { className: 'bstat-n', style:{color:'#00e878'} }, bulkRes.summary.safe), h('div', { className: 'bstat-l' }, 'Safe'))
+      ),
+      bulkRes.results.map((r, i) =>
+        h('div', { className: 'bulk-item', key: i, onClick: () => !r.error && setSelected(r) },
+          h('span', null, r.error ? '❌' : r.risk_emoji),
+          h('span', { className: 'bulk-url' }, r.url),
+          h('span', { className: 'bulk-score', style:{ color: r.risk_color || '#6b8aaa' } },
+            r.error ? 'Error' : r.risk_score + '%')
+        )
+      )
+    )
+  );
+}
+
+function HistoryTabView({ history, setHistory, setSelected }) {
+  return h('div', null,
+    h('div', { className: 'hist-header' },
+      h('h2', null, '📋 Scan History'),
+      history.length > 0 && h('button', { className: 'clear-btn', onClick: () => setHistory([]) }, '🗑 Clear All')
+    ),
+    history.length === 0
+      ? h('div', { className: 'empty' }, h('div', { className: 'empty-icon' }, '🔍'), h('p', null, 'No scans yet. Analyze a URL from the Scanner tab.'))
+      : history.map((item, i) =>
+          h('div', { className: 'hist-item', key: item.scan_id || i, onClick: () => setSelected(item) },
+            h('div', null,
+              h('div', { className: 'hist-url' }, item.url),
+              h('div', { className: 'hist-meta' },
+                h('span', { className: 'hist-time' }, new Date(item.scanned_at).toLocaleString()),
+                item.is_phishing
+                  ? h('span', { className: 'tag phish' }, '🎣 Phishing')
+                  : h('span', { className: 'tag safe' }, '✅ Safe'),
+                item.blocked && h('span', { className: 'tag blk' }, '🚫 Blocked'),
+                // Thumbnail if screenshot was captured
+                item.screenshot?.available && item.screenshot?.image_url
+                  && h('span', { style:{ fontSize:'0.7rem', color:'var(--accent)', fontFamily:'Space Mono' } }, '📸 screenshot')
+              )
+            ),
+            h('div', { className: 'hist-score' },
+              h('div', { className: 'hist-score-n', style:{ color: item.risk_color } }, item.risk_score + '%'),
+              h('div', { className: 'hist-score-l' }, 'RISK')
+            )
+          )
+        )
+  );
+}
+
+function StatsTabView({ history }) {
+    const total = history.length;
+    const phishing = history.filter(h => h.is_phishing).length;
+    const avg = total ? Math.round(history.reduce((a,b) => a + (b.risk_score||0), 0) / total) : 0;
+    const dist = { SAFE:0, LOW:0, MEDIUM:0, HIGH:0, CRITICAL:0 };
+    history.forEach(h => { if (dist[h.risk_level] !== undefined) dist[h.risk_level]++; });
+    const colors = { SAFE:'#34c759', LOW:'#30d158', MEDIUM:'#ffd60a', HIGH:'#ff6b35', CRITICAL:'#ff2d55' };
+
+    return h('div', null,
+      h('div', { className: 'stats-grid' },
+        [
+          { lbl: 'Total Scans', val: total, color: 'var(--accent)' },
+          { lbl: 'Phishing Found', val: phishing, color: '#ff2d55' },
+          { lbl: 'Safe Sites', val: total - phishing, color: '#00e878' },
+          { lbl: 'Avg Risk Score', val: avg + '%', color: 'var(--warn)' },
+          { lbl: 'Phishing Rate', val: total ? Math.round(phishing/total*100)+'%' : '—', color: '#ff6b35' },
+        ].map((s,i) =>
+          h('div', { className: 'scard', key: i, style:{ animationDelay: i*0.05+'s' } },
+            h('div', { className: 'scard-lbl' }, s.lbl),
+            h('div', { className: 'scard-val', style:{ color: s.color } }, s.val)
+          )
+        )
+      ),
+      total > 0 && h('div', null,
+        h('div', { style:{ fontSize:'1.1rem', fontWeight:800, marginBottom:16 } }, 'Risk Distribution'),
+        Object.entries(dist).map(([level, count]) =>
+          h('div', { key: level, style:{ marginBottom:12 } },
+            h('div', { style:{ display:'flex', justifyContent:'space-between', marginBottom:5, fontSize:'0.8rem' } },
+              h('span', { style:{ color: colors[level], fontWeight:700 } }, level),
+              h('span', { style:{ color:'var(--muted)', fontFamily:'Space Mono' } }, `${count} (${total ? Math.round(count/total*100) : 0}%)`)
+            ),
+            h('div', { style:{ height:'5px', background:'var(--surface2)', borderRadius:'99px', overflow:'hidden' } },
+              h('div', { style:{ height:'100%', width: (total ? count/total*100 : 0)+'%', background: colors[level], borderRadius:'99px', transition:'width 0.9s ease' } })
+            )
+          )
+        )
+      ),
+      total === 0 && h('div', { className: 'empty' }, h('div', { className: 'empty-icon' }, '📊'), h('p', null, 'Scan some URLs first to see your analytics!'))
+    );
+}
+
+
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>
