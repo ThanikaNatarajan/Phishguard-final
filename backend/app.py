@@ -45,10 +45,13 @@ try:
     ml_model = joblib.load(MODEL_PATH)
     with open(META_PATH) as f:
         metadata = json.load(f)
-    log.info(f"Model loaded | AUC: {metadata.get('test_auc','?')}")
+    # Use feature names from metadata so they always match the trained model
+    MODEL_FEATURE_NAMES = metadata.get('feature_names', None)
+    log.info(f"Model loaded | AUC: {metadata.get('test_auc','?')} | Features: {len(MODEL_FEATURE_NAMES) if MODEL_FEATURE_NAMES else '?'}")
 except Exception as e:
     ml_model = None
     metadata = {}
+    MODEL_FEATURE_NAMES = None
     log.warning(f"Model not loaded: {e}")
 
 scan_history: list = []
@@ -121,6 +124,15 @@ def extract_features(url: str) -> dict:
     f['has_fragment']             = int(bool(parsed.fragment))
     f['has_punycode']             = int('xn--' in hostname)
     f['excessive_subdomains']     = int(f['subdomain_count'] > 3)
+    # Extended features (added in PhishTank retraining)
+    import re as _re
+    _letters_only = _re.sub(r'[^a-z]', '', domain.lower())
+    _vowel_ratio  = sum(1 for c in _letters_only if c in 'aeiou') / max(len(_letters_only), 1)
+    _cons_run     = max((len(m.group()) for m in _re.finditer(r'[^aeiou]+', domain, _re.I)), default=0)
+    f['domain_vowel_ratio']       = round(_vowel_ratio, 4)
+    f['max_consonant_run']        = _cons_run
+    f['domain_length']            = len(domain)
+    f['domain_hyphen_count']      = domain.count('-')
     return f
 
 
@@ -195,41 +207,76 @@ def analyze_details(url: str, features: dict, score: float) -> dict:
     }
 
 
+def _build_screenshot_api_url(target_url: str) -> str:
+    """Build the ScreenshotOne API URL for a given target."""
+    if not target_url.startswith(('http://', 'https://')):
+        target_url = 'https://' + target_url
+    params = {
+        'access_key':          SCREENSHOT_API_KEY,
+        'url':                 target_url,
+        'viewport_width':      1280,
+        'viewport_height':     800,
+        'format':              'jpg',
+        'image_quality':       80,
+        'block_ads':           'true',
+        'block_cookie_banners':'true',
+        'timeout':             20,
+        'delay':               1,
+        'full_page':           'false',
+    }
+    qs = '&'.join(f"{k}={requests.utils.quote(str(v))}" for k, v in params.items())
+    return f"https://api.screenshotone.com/take?{qs}"
+
+
 def fetch_screenshot(url: str) -> dict:
+    """
+    Validate that ScreenshotOne can capture the URL.
+    Returns a proxy path (/screenshot?url=...) so the browser never
+    hits ScreenshotOne directly (avoids CORS / referrer blocks).
+    """
     if not SCREENSHOT_API_KEY:
         return {
             'available': False,
             'image_url': None,
-            'error': 'No API key set. Add SCREENSHOT_API_KEY to your .env file.',
+            'error': 'No API key configured. Add SCREENSHOT_API_KEY to your .env file.',
             'setup_url': 'https://screenshotone.com'
         }
-    try:
-        # Ensure URL has a scheme — ScreenshotOne requires a full valid URL
-        if not url.startswith(('http://', 'https://')):
-            url = 'https://' + url
-        params = {
-            'access_key': SCREENSHOT_API_KEY,
-            'url': url,
-            'viewport_width': 1280,
-            'viewport_height': 800,
-            'format': 'jpg',
-            'image_quality': 80,
-            'block_ads': 'true',
-            'block_cookie_banners': 'true',
-            'timeout': 15,
-            'delay': 1
-        }
-        base      = 'https://api.screenshotone.com/take'
-        query_str = '&'.join(f"{k}={requests.utils.quote(str(v))}" for k, v in params.items())
-        image_url = f"{base}?{query_str}"
-        # ScreenshotOne does not support HEAD requests — use GET with stream=True
-        r = requests.get(image_url, timeout=20, stream=True)
-        r.close()
-        if r.status_code == 200:
-            return {'available': True, 'image_url': image_url, 'error': None}
-        return {'available': False, 'image_url': None, 'error': f'Screenshot API returned {r.status_code}. Check your API key.'}
-    except Exception as e:
-        return {'available': False, 'image_url': None, 'error': str(e)}
+    if not url.startswith(('http://', 'https://')):
+        url = 'https://' + url
+
+    api_url = _build_screenshot_api_url(url)
+
+    # Try up to 2 times — ScreenshotOne can be slow on first hit
+    for attempt in range(2):
+        try:
+            r = requests.get(api_url, timeout=25, stream=True)
+            content_type = r.headers.get('content-type', '')
+            # Read just the first chunk to confirm it's an image (not an error JSON)
+            first_chunk = next(r.iter_content(512), b'')
+            r.close()
+            if r.status_code == 200 and 'image' in content_type:
+                # Return a proxy path — browser will call our /screenshot endpoint
+                proxy_url = f"/screenshot?url={requests.utils.quote(url, safe='')}"
+                return {'available': True, 'image_url': proxy_url, 'error': None}
+            elif r.status_code == 200 and first_chunk.startswith(b'\xff\xd8'):
+                # JPEG magic bytes — it's an image even if content-type was wrong
+                proxy_url = f"/screenshot?url={requests.utils.quote(url, safe='')}"
+                return {'available': True, 'image_url': proxy_url, 'error': None}
+            else:
+                err = f'ScreenshotOne returned HTTP {r.status_code}'
+                if attempt == 0:
+                    log.warning(f"{err} — retrying…")
+                    time.sleep(1)
+                    continue
+                return {'available': False, 'image_url': None, 'error': err}
+        except requests.exceptions.Timeout:
+            if attempt == 0:
+                log.warning("Screenshot timeout — retrying…")
+                continue
+            return {'available': False, 'image_url': None, 'error': 'Screenshot timed out (site may be slow or offline)'}
+        except Exception as e:
+            return {'available': False, 'image_url': None, 'error': str(e)}
+    return {'available': False, 'image_url': None, 'error': 'Screenshot failed after retries'}
 
 
 def get_domain_age(url: str) -> dict:
@@ -241,7 +288,13 @@ def get_domain_age(url: str) -> dict:
         hostname = urlparse(url).hostname or ''
         if hostname.startswith('www.'):
             hostname = hostname[4:]
-        w = whois_lib.whois(hostname)
+        import socket
+        old_timeout = socket.getdefaulttimeout()
+        socket.setdefaulttimeout(5)  # 5 second max for WHOIS
+        try:
+            w = whois_lib.whois(hostname)
+        finally:
+            socket.setdefaulttimeout(old_timeout)
         created = w.creation_date
         if isinstance(created, list):
             created = created[0]
@@ -268,10 +321,44 @@ def get_domain_age(url: str) -> dict:
 def run_scan(url: str) -> dict:
     url = url.strip()
     if not url: raise ValueError('URL is required')
+    # Auto-add scheme if missing so bare domains like "example.com" work
+    if not url.startswith(('http://','https://')):
+        url = 'https://' + url
     t0            = time.time()
     features      = extract_features(url)
-    feature_names = get_feature_names()
+    # Use feature names from saved model metadata (handles any number of features)
+    feature_names = MODEL_FEATURE_NAMES if MODEL_FEATURE_NAMES else get_feature_names()
     vec           = np.array([[features.get(k, 0) for k in feature_names]])
+
+    # Trusted domain whitelist — model can over-score well-known legitimate sites
+    _hostname_check = (urlparse(url).hostname or '').lower().lstrip('www.')
+    TRUSTED_DOMAINS = {
+        'google.com','youtube.com','facebook.com','amazon.com','wikipedia.org',
+        'twitter.com','instagram.com','linkedin.com','reddit.com','netflix.com',
+        'microsoft.com','apple.com','github.com','stackoverflow.com','bbc.com',
+        'bbc.co.uk','nytimes.com','cnn.com','paypal.com','ebay.com','spotify.com',
+        'discord.com','twitch.tv','dropbox.com','adobe.com','zoom.us','slack.com',
+        'shopify.com','stripe.com','cloudflare.com','roblox.com','steam.com',
+        'steamcommunity.com','steampowered.com','tiktok.com','whatsapp.com',
+    }
+    if any(_hostname_check == d or _hostname_check.endswith('.'+d) for d in TRUSTED_DOMAINS):
+        log.info(f"Trusted domain whitelist: {_hostname_check} → forcing SAFE")
+        risk_info = get_risk_info(0.0)
+        details   = analyze_details(url, features, 0.0)
+        screenshot = fetch_screenshot(url)
+        with ThreadPoolExecutor(max_workers=1) as ex:
+            domain_age = ex.submit(get_domain_age, url).result()
+        result = {
+            'scan_id': hashlib.md5(f"{url}{time.time()}".encode()).hexdigest()[:12],
+            'url': url, 'scanned_at': datetime.now(timezone.utc).isoformat(),
+            'scan_time_seconds': round(time.time()-t0, 3),
+            'risk_score': 0.0, 'risk_raw': 0.0, 'is_phishing': False,
+            'risk_level': 'SAFE', 'risk_label': 'Safe', 'risk_color': '#34c759', 'risk_emoji': '🛡️',
+            'details': details, 'screenshot': screenshot, 'domain_age': domain_age, 'blocked': False,
+        }
+        scan_history.insert(0, result)
+        if len(scan_history) > 500: scan_history.pop()
+        return result
     log.info(f"Scanning: {url} | is_https={features.get('is_https')} susp_tld={features.get('is_suspicious_tld')} kw={features.get('suspicious_keyword_count')} brand={features.get('brand_impersonation')}")
     if ml_model:
         risk_score = float(ml_model.predict_proba(vec)[0][1])
@@ -284,8 +371,118 @@ def run_scan(url: str) -> dict:
             features.get('has_ip_address',0)*0.35 +
             features.get('brand_impersonation',0)*0.25)
         log.info(f"Heuristic score: {risk_score:.4f}")
+
+    # ── Heuristic override layer ──────────────────────────────────
+    # The ML model misses certain attack patterns not well-represented
+    # in training data. These rules catch them and floor the score.
+    heuristic_boost = 0.0
+    heuristic_flags = []
+
+    if not url.startswith(('http://','https://')):
+        _url_check = 'http://' + url
+    else:
+        _url_check = url
+    _parsed   = urlparse(_url_check)
+    _hostname = (_parsed.hostname or '').lower()
+    _parts    = _hostname.split('.')
+    _tld      = ('.' + _parts[-1]) if len(_parts) > 1 else ''
+    _full     = _url_check.lower()
+
+    # 1. Subdomain brand impersonation — e.g. roblox.com.ge, paypal.com.phishing.net
+    #    Real domain is the last 2 parts; if a brand appears in subdomains only → phishing
+    BRANDS = ['paypal','amazon','apple','google','microsoft','netflix','facebook',
+              'instagram','twitter','ebay','chase','wellsfargo','roblox','steam',
+              'discord','spotify','tiktok','youtube','linkedin','dropbox','adobe']
+    real_domain = '.'.join(_parts[-2:]) if len(_parts) >= 2 else _hostname
+    brand_in_subdomain = any(b in _hostname and b not in real_domain for b in BRANDS)
+    if brand_in_subdomain:
+        heuristic_boost = max(heuristic_boost, 0.82)
+        heuristic_flags.append(f'Brand name found in subdomain but NOT in real domain ({real_domain}) — classic subdomain impersonation attack')
+
+    # 2. Brand + non-trusted TLD (e.g. paypal.net.ru, google.com.br.tk)
+    if any(b in _hostname for b in BRANDS) and _tld not in {'.com','.org','.net','.gov','.edu','.io'}:
+        heuristic_boost = max(heuristic_boost, 0.70)
+        if not any(f'non-trusted TLD' in flag for flag in heuristic_flags):
+            heuristic_flags.append(f'Brand name combined with non-standard TLD ({_tld}) — suspicious')
+
+    # 3. Multiple dots in hostname with brand name (e.g. www.paypal.com.secure.tk)
+    if len(_parts) > 3 and any(b in _hostname for b in BRANDS):
+        heuristic_boost = max(heuristic_boost, 0.75)
+
+    # 4. Typosquatting — common brand misspellings
+    TYPOS = {
+        'paypa1':'paypal','micosoft':'microsoft','micros0ft':'microsoft',
+        'arnazon':'amazon','arnaz0n':'amazon','g00gle':'google','gooogle':'google',
+        'faceb00k':'facebook','yotube':'youtube','discrod':'discord',
+        'rob1ox':'roblox','robl0x':'roblox','steamn':'steam',
+    }
+    for typo in TYPOS:
+        if typo in _hostname:
+            heuristic_boost = max(heuristic_boost, 0.88)
+            heuristic_flags.append(f'Typosquatting detected: "{typo}" mimics a real brand — common phishing trick')
+            break
+
+    # 5. Homograph / confusable characters in domain
+    CONFUSABLES = {'0':'o','1':'l','rn':'m','vv':'w'}
+    for fake, real in CONFUSABLES.items():
+        if fake in (_parts[0] if _parts else '') and real not in (_parts[0] if _parts else ''):
+            heuristic_boost = max(heuristic_boost, 0.72)
+            heuristic_flags.append(f'Homograph attack: "{fake}" used to mimic "{real}" in domain name')
+
+    # 6. Misleading "secure" / "official" combined with brand
+    TRUST_WORDS = ['secure','official','verify','update','login','signin','support','helpdesk']
+    if any(w in _full for w in TRUST_WORDS) and any(b in _full for b in BRANDS):
+        heuristic_boost = max(heuristic_boost, 0.65)
+        heuristic_flags.append('Combines a brand name with trust-inducing words (secure, official, verify…) — common social engineering tactic')
+
+    # 7. Country-code TLD masquerading (brand.com.XX)
+    CC_TLDS = {'.ge','.ru','.cn','.pw','.cc','.su','.ws','.to','.ly','.gg'}
+    if _tld in CC_TLDS and any(b in _hostname for b in BRANDS):
+        heuristic_boost = max(heuristic_boost, 0.80)
+        heuristic_flags.append(f'Brand name combined with country-code TLD ({_tld}) — frequently used in impersonation attacks')
+
+    # 8. Gibberish / unpronounceable domain (encyclopeid-annem, xkqzjp, etc.)
+    _domain_part = _parts[0] if _parts else ''
+    _letters_only = re.sub(r'[^a-z]', '', _domain_part.lower())
+    _vowel_ratio  = sum(1 for c in _letters_only if c in 'aeiou') / max(len(_letters_only), 1)
+    _consonant_run = max((len(m.group()) for m in re.finditer(r'[^aeiou]+', _domain_part, re.I)), default=0)
+    _dom_entropy  = shannon_entropy(_domain_part)
+    _is_gibberish = (
+        (_consonant_run >= 5 and len(_domain_part) > 8) or
+        (_dom_entropy > 3.5 and len(_domain_part) > 10) or
+        (_vowel_ratio < 0.18 and len(_letters_only) > 6)
+    )
+    if _is_gibberish:
+        heuristic_boost = max(heuristic_boost, 0.62)
+        heuristic_flags.append(f'Domain name appears randomly generated or unpronounceable (entropy={_dom_entropy:.2f}) — commonly seen in auto-generated phishing domains')
+
+    # 9. Long hyphenated domain with no brand (e.g. encyclopeid-annem, secure-account-verify-now)
+    _hyphen_parts = _domain_part.split('-')
+    if len(_hyphen_parts) >= 2 and len(_domain_part) > 14 and not any(b in _domain_part for b in BRANDS):
+        heuristic_boost = max(heuristic_boost, 0.55)
+        heuristic_flags.append(f'Long hyphenated domain ({_domain_part}) with no recognisable brand — pattern common in phishing registrations')
+
+    # 10. PhishTank-style: random-looking domain + .com pretending to be legit
+    #     Legitimate .com sites rarely have entropy > 3.4 AND length > 14
+    if _tld == '.com' and _dom_entropy > 3.4 and len(_domain_part) > 14:
+        heuristic_boost = max(heuristic_boost, 0.60)
+        if not any('randomly generated' in f for f in heuristic_flags):
+            heuristic_flags.append(f'High-entropy .com domain ({_domain_part}) — legitimate sites rarely have this pattern')
+
+    # Apply boost: take the max of ML score and heuristic floor
+    if heuristic_boost > risk_score:
+        log.info(f"Heuristic override: {risk_score:.4f} → {heuristic_boost:.4f} | Flags: {heuristic_flags}")
+        risk_score = heuristic_boost
+
+    log.info(f"Final score: {risk_score:.4f} ({round(risk_score*100,1)}%)")
     risk_info = get_risk_info(risk_score)
     details   = analyze_details(url, features, risk_score)
+    # Inject heuristic flags into red flags so they appear in the report
+    if heuristic_flags:
+        details['red_flags'] = heuristic_flags + details['red_flags']
+        # Override verdict if heuristic boosted score significantly
+        if heuristic_boost >= 0.75:
+            details['verdict'] = 'This URL shows signs of an impersonation attack — it uses a well-known brand name to trick you into thinking it is legitimate, but the real domain is different. We strongly recommend NOT visiting this site.'
     # Run screenshot and WHOIS in parallel to save time
     with ThreadPoolExecutor(max_workers=2) as ex:
         f_screenshot = ex.submit(fetch_screenshot, url)
@@ -321,6 +518,41 @@ class ScanRequest(BaseModel):
 class BulkScanRequest(BaseModel):
     urls: List[str]
 
+
+from fastapi.responses import StreamingResponse
+import urllib.parse as _urlparse
+
+
+@app.get('/screenshot')
+def proxy_screenshot(url: str):
+    """
+    Proxy endpoint: fetches the screenshot from ScreenshotOne server-side
+    and streams the image bytes to the browser.
+    This avoids CORS issues and keeps the API key hidden from the client.
+    """
+    if not SCREENSHOT_API_KEY:
+        raise HTTPException(503, 'Screenshot service not configured')
+    try:
+        target = _urlparse.unquote(url)
+        if not target.startswith(('http://', 'https://')):
+            target = 'https://' + target
+        api_url = _build_screenshot_api_url(target)
+        r = requests.get(api_url, timeout=30, stream=True)
+        if r.status_code != 200:
+            raise HTTPException(502, f'ScreenshotOne returned {r.status_code}')
+        content_type = r.headers.get('content-type', 'image/jpeg')
+        def iter_content():
+            for chunk in r.iter_content(chunk_size=8192):
+                if chunk:
+                    yield chunk
+        return StreamingResponse(iter_content(), media_type=content_type,
+                                 headers={'Cache-Control': 'public, max-age=300'})
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(502, str(e))
+
+
 @app.get('/')
 def root(): return {'status': 'PhishGuard running', 'model_loaded': ml_model is not None}
 
@@ -335,6 +567,9 @@ def scan_url(req: ScanRequest):
         return result
     except ValueError as e:
         raise HTTPException(400, str(e))
+    except Exception as e:
+        log.error(f"Scan error for {req.url}: {e}", exc_info=True)
+        raise HTTPException(500, f"Scan failed: {str(e)}")
 
 @app.post('/scan/bulk')
 def bulk_scan(req: BulkScanRequest):

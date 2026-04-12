@@ -26,7 +26,52 @@
   --danger2: #ff6b35;
   --r: 12px;
   --r2: 18px;
+  --navbar-bg: rgba(6,10,15,0.85);
 }
+body.light {
+  --bg: #f0f4f8;
+  --surface: #ffffff;
+  --surface2: #e8eef5;
+  --surface3: #dde5ef;
+  --border: rgba(0,0,0,0.09);
+  --border-glow: rgba(0,150,200,0.25);
+  --text: #0d1520;
+  --muted: #5a7a9a;
+  --dim: #8aaac8;
+  --accent: #007acc;
+  --accent2: #6b1fd9;
+  --safe: #00a854;
+  --warn: #c48a00;
+  --danger: #d4002a;
+  --danger2: #d44a00;
+  --navbar-bg: rgba(240,244,248,0.92);
+}
+
+/* ── Theme toggle switch ── */
+.theme-toggle {
+  display: flex; align-items: center; gap: 8px;
+  cursor: pointer; user-select: none;
+}
+.theme-toggle-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 0.68rem; color: var(--muted);
+  letter-spacing: 0.3px;
+}
+.toggle-track {
+  position: relative; width: 44px; height: 24px;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 99px; cursor: pointer;
+  transition: background 0.25s, border-color 0.25s;
+}
+.toggle-track.on { background: var(--accent); border-color: var(--accent); }
+.toggle-thumb {
+  position: absolute; top: 3px; left: 3px;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+  transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1);
+  display: grid; place-items: center; font-size: 9px; line-height: 1;
+}
+.toggle-track.on .toggle-thumb { transform: translateX(20px); }
 html { scroll-behavior: smooth; }
 body {
   background: var(--bg);
@@ -50,7 +95,7 @@ body::before {
 .navbar {
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 36px; height: 58px;
-  background: rgba(6,10,15,0.85);
+  background: var(--navbar-bg);
   backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--border);
   position: sticky; top: 0; z-index: 100;
@@ -546,6 +591,15 @@ function ScreenshotPanel({ screenshot, url }) {
   const [imgLoaded, setImgLoaded] = useState(false);
   const [imgError, setImgError] = useState(false);
 
+  // Reset image state whenever the screenshot data changes (new scan)
+  const imgKey = screenshot?.image_url || url;
+  const prevKey = useRef(null);
+  if (prevKey.current !== imgKey) {
+    prevKey.current = imgKey;
+    // Can't call setState mid-render, so use a flag trick via ref
+  }
+  // Use key on <img> element to force remount on new scan (handled below)
+
   const isAvailable = screenshot?.available && screenshot?.image_url;
   const isNotConfigured = !screenshot?.available && screenshot?.error;
 
@@ -572,25 +626,8 @@ function ScreenshotPanel({ screenshot, url }) {
       ),
 
       isAvailable
-        // ── Image loaded from backend ──
-        ? h('div', { className: 'ss-img-wrap' },
-            !imgLoaded && !imgError && h('div', { className: 'ss-img-loading' },
-              h('span', null, '⏳'), h('span', null, 'Loading screenshot…')
-            ),
-            imgError
-              ? h('div', { className: 'ss-img-error' },
-                  h('div', { className: 'ss-img-error-icon' }, '🖼️'),
-                  h('div', { className: 'ss-img-error-title' }, 'Screenshot unavailable'),
-                  h('div', { className: 'ss-img-error-msg' }, 'The site may have blocked automated screenshots, or the page is offline.')
-                )
-              : h('img', {
-                  className: 'ss-img', src: screenshot.image_url, alt: 'Website preview',
-                  onLoad: () => setImgLoaded(true),
-                  onError: () => setImgError(true),
-                  style: { display: imgLoaded ? 'block' : 'none' }
-                }),
-            imgLoaded && !imgError && h('div', { className: 'ss-overlay' }),
-          )
+        // ── Image proxied through backend ──
+        ? h(ScreenshotImage, { key: imgKey, src: screenshot.image_url, url })
 
         // ── Not configured — show clear setup instructions ──
         : h('div', { className: 'ss-not-configured' },
@@ -605,7 +642,9 @@ function ScreenshotPanel({ screenshot, url }) {
               h('div', null, h('strong', null, 'Step 3:'), ' Create a ', h('code', null, '.env'), ' file next to ', h('code', null, 'app.py'), ':'),
               h('div', { style: { fontFamily: 'Space Mono, monospace', background: '#0d1520', padding: '8px 12px', borderRadius: '6px', margin: '4px 0', color: '#00c8ff', fontSize: '0.8rem' } },
                 'SCREENSHOT_API_KEY=your_key_here'),
-              h('div', null, h('strong', null, 'Step 4:'), ' Restart the backend: ', h('code', null, 'uvicorn app:app --reload'))
+              h('div', null, h('strong', null, 'Step 4:'), ' Restart the backend: ', h('code', null, 'uvicorn app:app --reload')),
+              screenshot?.error && h('div', { style: { marginTop: '10px', padding: '8px 12px', background: 'rgba(255,45,85,0.1)', borderRadius: '6px', color: '#ff6b35', fontSize: '0.78rem', fontFamily: 'Space Mono, monospace' } },
+                '⚠ ', screenshot.error)
             )
           ),
 
@@ -614,6 +653,30 @@ function ScreenshotPanel({ screenshot, url }) {
         h('span', null, new URL(url.startsWith('http') ? url : 'http://'+url).hostname)
       )
     )
+  );
+}
+
+// Separate component so `key` prop forces full remount on new scan
+function ScreenshotImage({ src, url }) {
+  const [imgLoaded, setImgLoaded] = useState(false);
+  const [imgError, setImgError] = useState(false);
+  return h('div', { className: 'ss-img-wrap' },
+    !imgLoaded && !imgError && h('div', { className: 'ss-img-loading' },
+      h('span', null, '⏳'), h('span', null, 'Loading screenshot…')
+    ),
+    imgError
+      ? h('div', { className: 'ss-img-error' },
+          h('div', { className: 'ss-img-error-icon' }, '🖼️'),
+          h('div', { className: 'ss-img-error-title' }, 'Screenshot unavailable'),
+          h('div', { className: 'ss-img-error-msg' }, 'The site may have blocked automated screenshots, be offline, or refused the connection.')
+        )
+      : h('img', {
+          className: 'ss-img', src, alt: 'Website preview',
+          onLoad: () => setImgLoaded(true),
+          onError: () => setImgError(true),
+          style: { display: imgLoaded ? 'block' : 'none' }
+        }),
+    imgLoaded && !imgError && h('div', { className: 'ss-overlay' }),
   );
 }
 
@@ -732,6 +795,14 @@ function ResultCard({ result, onClose }) {
 // ─── App ──────────────────────────────────────────────────────
 function App() {
   const [tab, setTab] = useState('scan');
+  const [dark, setDark] = useState(true);
+  const toggleTheme = () => {
+    setDark(d => {
+      const next = !d;
+      document.body.classList.toggle('light', !next);
+      return next;
+    });
+  };
   const [url, setUrl] = useState('');
   const [bulk, setBulk] = useState(false);
   const [bulkText, setBulkText] = useState('');
@@ -764,11 +835,19 @@ function App() {
           body: JSON.stringify({ url: target }),
           signal: AbortSignal.timeout(30000)
         });
-        res = await resp.json();
-     } catch(e) { 
-      console.error('Backend error:', e);
-      res = await demoScan(target); 
-    }
+        if (!resp.ok) {
+          const errText = await resp.text();
+          console.error('Backend error ' + resp.status + ':', errText);
+          throw new Error('Backend returned ' + resp.status);
+        }
+        const data = await resp.json();
+        // Validate response has the fields we need
+        if (typeof data.risk_score !== 'number') throw new Error('Invalid response: missing risk_score');
+        res = data;
+      } catch(e) { 
+        console.error('Backend error:', e);
+        res = await demoScan(target); 
+      }
       setResult(res);
       addToHistory(res);
     } catch(e) { alert('Scan error: ' + e.message); }
@@ -780,7 +859,22 @@ function App() {
     if (!urls.length) return;
     setLoading(true); setResult(null); setBulkRes(null);
     try {
-      const results = await Promise.all(urls.map(u => demoScan(u).catch(e => ({ url: u, error: e.message }))));
+      let results;
+      try {
+        const resp = await fetch(`${API}/scan/bulk`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ urls }),
+          signal: AbortSignal.timeout(60000)
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          results = data.results;
+        } else throw new Error('Backend bulk scan failed');
+      } catch(e) {
+        console.error('Bulk backend error:', e);
+        results = await Promise.all(urls.map(u => demoScan(u).catch(e => ({ url: u, error: e.message }))));
+      }
       const phishing = results.filter(r => r.is_phishing).length;
       setBulkRes({ summary: { total: results.length, phishing, safe: results.length - phishing }, results });
       results.forEach(r => { if (!r.error) addToHistory(r); });
@@ -815,8 +909,17 @@ function App() {
           )
         )
       ),
-      h('div', { className: 'live-pill' },
-        h('div', { className: 'live-dot' }), 'AI LIVE'
+      h('div', { style:{ display:'flex', alignItems:'center', gap:16 } },
+        h('div', { className: 'live-pill' },
+          h('div', { className: 'live-dot' }), 'AI LIVE'
+        ),
+        h('div', { className: 'theme-toggle', onClick: toggleTheme },
+          h('span', { className: 'theme-toggle-label' }, dark ? '🌙' : '☀️'),
+          h('div', { className: `toggle-track ${dark ? '' : 'on'}` },
+            h('div', { className: 'toggle-thumb' }, dark ? '🌙' : '☀️')
+          ),
+          h('span', { className: 'theme-toggle-label' }, dark ? 'Dark' : 'Light')
+        )
       )
     ),
     h('main', { className: 'main' }, renderTab()),

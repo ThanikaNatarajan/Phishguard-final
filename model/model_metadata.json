@@ -36,20 +36,20 @@
     "excessive_subdomains"
   ],
   "n_features": 34,
-  "training_samples": 188636,
-  "test_auc": 0.9984825536242756,
-  "cv_auc_mean": 0.9986177388601704,
-  "cv_auc_std": 0.00013593714377120876,
+  "training_samples": 4800,
+  "test_auc": 1.0,
+  "cv_auc_mean": 1.0,
+  "cv_auc_std": 0.0,
   "top_features": {
-    "is_https": 0.39640337735554176,
-    "num_slashes": 0.11712434695701851,
-    "path_depth": 0.09729879918001681,
-    "path_length": 0.09631762842901613,
-    "domain_entropy": 0.08093277791086949,
-    "digit_letter_ratio": 0.05066117840759009,
-    "num_digits_in_url": 0.04916270482017102,
-    "url_length": 0.0304224137777668,
-    "is_suspicious_tld": 0.022737666620388824,
-    "hostname_length": 0.011667838821898067
+    "is_https": 0.14530789270915173,
+    "suspicious_keyword_count": 0.13925592004387216,
+    "is_trusted_tld": 0.12861174915104023,
+    "digit_letter_ratio": 0.10198436891532157,
+    "url_length": 0.09840265508897175,
+    "num_digits_in_url": 0.09090602620469952,
+    "is_suspicious_tld": 0.06692816478027289,
+    "num_hyphens": 0.04572642814258177,
+    "path_length": 0.03865993730172739,
+    "path_depth": 0.031417522879775166
   }
 }
