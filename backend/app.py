@@ -29,6 +29,12 @@ try:
 except ImportError:
     WHOIS_AVAILABLE = False
 
+from shared.features import (
+    normalize_url,
+    extract_features,
+    extract_domain_parts
+)
+
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("phishguard")
 
@@ -73,7 +79,7 @@ def shannon_entropy(s):
     return -sum(p * math.log2(p) for p in prob if p > 0)
 
 
-def extract_features(url: str) -> dict:
+def extract_features_OLD(url: str) -> dict:
     if not url.startswith(('http://','https://')):
         url = 'http://' + url
     try:

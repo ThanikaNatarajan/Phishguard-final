@@ -485,10 +485,7 @@ body::before {
 const { useState, useEffect, useCallback, useRef } = React;
 const h = React.createElement;
 
-const API =
-  window.location.hostname === 'localhost'
-    ? 'http://localhost:8000'
-    : window.location.origin;
+const API = "http://127.0.0.1:8000";
 
 // ─── Client-side feature extractor (demo mode) ───────────────
 const SUSP_KW = ['login','signin','verify','account','update','secure','banking','paypal','amazon','apple','google','microsoft','netflix','ebay','password','confirm','suspend','alert','urgent','winner'];
@@ -582,7 +579,7 @@ async function demoScan(url) {
     risk_level: ri.level, risk_label: ri.label, risk_color: ri.color, risk_emoji: ri.emoji,
     details,
     // In demo mode screenshot needs backend; we'll show the "not configured" state
-    screenshot: { available: false, image_url: null, error: 'Backend not connected. Run app.py and add SCREENSHOT_API_KEY to .env', setup_url: 'https://screenshotone.com' },
+    screenshot: { available: false, image_url: null, error: 'Screenshot not configured (API key missing)', setup_url: 'https://screenshotone.com' },
     blocked: score >= 0.5,
     domain_age: { age_days: null, created: null, label: 'Connect backend for real domain age' },
   };
@@ -849,7 +846,7 @@ function App() {
         res = data;
       } catch(e) { 
         console.error('Backend error:', e);
-        res = await demoScan(target); 
+        throw new Error('Backend request failed — check if server is running');
       }
       setResult(res);
       addToHistory(res);
