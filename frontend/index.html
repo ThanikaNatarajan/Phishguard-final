@@ -485,7 +485,7 @@ body::before {
 const { useState, useEffect, useCallback, useRef } = React;
 const h = React.createElement;
 
-const API = "http://127.0.0.1:8000";
+const API = window.location.origin;
 
 // ─── Client-side feature extractor (demo mode) ───────────────
 const SUSP_KW = ['login','signin','verify','account','update','secure','banking','paypal','amazon','apple','google','microsoft','netflix','ebay','password','confirm','suspend','alert','urgent','winner'];
@@ -873,7 +873,22 @@ function App() {
         } else throw new Error('Backend bulk scan failed');
       } catch(e) {
         console.error('Bulk backend error:', e);
-        results = await Promise.all(urls.map(u => demoScan(u).catch(e => ({ url: u, error: e.message }))));
+        const results = await Promise.all(
+          urls.map(async (u) => {
+            const resp = await fetch(`${API}/scan`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ url: u }),
+              signal: AbortSignal.timeout(30000)
+            });
+
+            if (!resp.ok) {
+              throw new Error(`Backend failed for ${u}`);
+            }
+
+            return await resp.json();
+          })
+        );
       }
       const phishing = results.filter(r => r.is_phishing).length;
       setBulkRes({ summary: { total: results.length, phishing, safe: results.length - phishing }, results });

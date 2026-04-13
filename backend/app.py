@@ -319,27 +319,16 @@ def run_scan(url: str) -> dict:
         'shopify.com','stripe.com','cloudflare.com','roblox.com','steam.com',
         'steamcommunity.com','steampowered.com','tiktok.com','whatsapp.com',
     }
-    if any(_hostname_check == d or _hostname_check.endswith('.'+d) for d in TRUSTED_DOMAINS):
-        log.info(f"Trusted domain whitelist: {_hostname_check} → forcing SAFE")
-        risk_info = get_risk_info(0.0)
-        details   = analyze_details(url, features, 0.0)
-        screenshot = fetch_screenshot(url)
-        with ThreadPoolExecutor(max_workers=1) as ex:
-            domain_age = ex.submit(get_domain_age, url).result()
-        result = {
-            'scan_id': hashlib.md5(f"{url}{time.time()}".encode()).hexdigest()[:12],
-            'url': url, 'scanned_at': datetime.now(timezone.utc).isoformat(),
-            'scan_time_seconds': round(time.time()-t0, 3),
-            'risk_score': 0.0, 'risk_raw': 0.0, 'is_phishing': False,
-            'risk_level': 'SAFE', 'risk_label': 'Safe', 'risk_color': '#34c759', 'risk_emoji': '🛡️',
-            'details': details, 'screenshot': screenshot, 'domain_age': domain_age, 'blocked': False,
-        }
-        scan_history.insert(0, result)
-        if len(scan_history) > 500: scan_history.pop()
-        return result
+    
     log.info(f"Scanning: {url} | is_https={features.get('is_https')} susp_tld={features.get('is_suspicious_tld')} kw={features.get('suspicious_keyword_count')} brand={features.get('brand_impersonation')}")
     if ml_model:
         risk_score = float(ml_model.predict_proba(vec)[0][1])
+        # Soft trusted-domain adjustment (NOT forced safe)
+        _hostname_check = (urlparse(url).hostname or '').lower()
+
+        if any(_hostname_check == d or _hostname_check.endswith('.' + d) for d in TRUSTED_DOMAINS):
+            log.info(f"Trusted domain detected: {_hostname_check} → reducing risk")
+            risk_score *= 0.3  # reduce but do NOT zero out
         log.info(f"AI score: {risk_score:.4f} ({round(risk_score*100,1)}%)")
     else:
         risk_score = min(1.0,
@@ -500,6 +489,24 @@ class BulkScanRequest(BaseModel):
 from fastapi.responses import StreamingResponse
 import urllib.parse as _urlparse
 
+import ipaddress
+import socket
+from urllib.parse import urlparse
+
+
+def is_private_host(hostname: str) -> bool:
+    try:
+        ip = socket.gethostbyname(hostname)
+        ip_obj = ipaddress.ip_address(ip)
+
+        return (
+            ip_obj.is_private
+            or ip_obj.is_loopback
+            or ip_obj.is_reserved
+            or ip_obj.is_link_local
+        )
+    except:
+        return True
 
 @app.get('/screenshot')
 def proxy_screenshot(url: str):
@@ -508,6 +515,16 @@ def proxy_screenshot(url: str):
     and streams the image bytes to the browser.
     This avoids CORS issues and keeps the API key hidden from the client.
     """
+    parsed = urlparse(url)
+    hostname = parsed.hostname
+
+    if not hostname or is_private_host(hostname):
+        return {
+            "available": False,
+            "image_url": None,
+            "error": "Blocked for security reasons"
+        }
+    
     if not SCREENSHOT_API_KEY:
         raise HTTPException(503, 'Screenshot service not configured')
     try:
