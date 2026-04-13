@@ -485,7 +485,10 @@ body::before {
 const { useState, useEffect, useCallback, useRef } = React;
 const h = React.createElement;
 
-const API = window.location.origin;
+const API =
+  location.protocol === "file:"
+    ? "http://127.0.0.1:8000"
+    : window.location.origin;
 
 // ─── Client-side feature extractor (demo mode) ───────────────
 const SUSP_KW = ['login','signin','verify','account','update','secure','banking','paypal','amazon','apple','google','microsoft','netflix','ebay','password','confirm','suspend','alert','urgent','winner'];
@@ -560,29 +563,6 @@ function riskInfo(r) {
   if (r >= 40) return { level:'MEDIUM',   color:'#ffd60a', emoji:'⚡',  label:'Medium Risk' };
   if (r >= 20) return { level:'LOW',      color:'#30d158', emoji:'✅',  label:'Low Risk' };
   return              { level:'SAFE',     color:'#34c759', emoji:'🛡️', label:'Safe' };
-}
-
-async function demoScan(url) {
-  await new Promise(r => setTimeout(r, 1100 + Math.random()*700));
-  const f = clientExtract(url);
-  if (!f) throw new Error('Invalid URL');
-  const score = clientScore(f);
-  const ri = riskInfo(Math.round(score * 100));
-  const details = clientReport(f, score);
-  return {
-    scan_id: Math.random().toString(36).slice(2,14),
-    url, scanned_at: new Date().toISOString(),
-    scan_time_seconds: +(Math.random()*0.4+0.1).toFixed(3),
-    risk_score: Math.round(score * 1000) / 10,
-    risk_raw: score,
-    is_phishing: score >= 0.5,
-    risk_level: ri.level, risk_label: ri.label, risk_color: ri.color, risk_emoji: ri.emoji,
-    details,
-    // In demo mode screenshot needs backend; we'll show the "not configured" state
-    screenshot: { available: false, image_url: null, error: 'Screenshot not configured (API key missing)', setup_url: 'https://screenshotone.com' },
-    blocked: score >= 0.5,
-    domain_age: { age_days: null, created: null, label: 'Connect backend for real domain age' },
-  };
 }
 
 // ─── Screenshot panel component ───────────────────────────────
