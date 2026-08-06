@@ -112,7 +112,7 @@ phishguard/
 ### 1. Clone Repo
 
 ```
-git clone <your-repo-url>
+git clone https://github.com/ThanikaNatarajan/Phishguard-final.git
 cd phishguard
 ```
 
